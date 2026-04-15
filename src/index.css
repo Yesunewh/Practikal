@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .tap-highlight {
+    @apply transition-transform duration-150 ease-out motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[0.98];
+  }
+}
+
+@media print {
+  @page {
+    margin: 1.2cm;
+  }
+}
