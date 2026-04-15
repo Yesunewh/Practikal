@@ -54,7 +54,7 @@ function Login() {
       <section className="order-2 lg:order-1 flex flex-1 flex-col bg-white px-6 py-10 sm:px-10 lg:px-14 lg:py-12 lg:max-w-[50vw] motion-safe:animate-fade-in-up motion-safe:delay-150">
         <div className="flex flex-1 flex-col items-center justify-center max-w-lg mx-auto w-full">
           <div
-            className="w-full max-w-md aspect-[5/4] rounded-2xl overflow-hidden shadow-sm border border-gray-100 mb-8 bg-gray-50 bg-[url('/login-hero.png')] bg-[length:200%_auto] bg-[position:left_center] bg-no-repeat"
+            className="w-full max-w-md aspect-[5/4] rounded-2xl overflow-hidden shadow-sm border border-gray-100 mb-8 bg-gray-50 bg-[url('/login-hero.webp')] bg-[length:200%_auto] bg-[position:left_center] bg-no-repeat"
             role="img"
             aria-label="Security awareness illustration"
           />
