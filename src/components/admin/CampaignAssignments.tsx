@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { User } from '../../types';
-import { useCampaigns } from '../../context/CampaignContext';
-import { useChallenges } from '../../context/ChallengeContext';
+import { AppDispatch } from '../../store';
+import { addCampaign, addAssignment, deleteAssignment } from '../../store/slices/campaignsSlice';
 import { Calendar, Plus, Trash2 } from 'lucide-react';
 
 interface CampaignAssignmentsProps {
@@ -9,8 +10,10 @@ interface CampaignAssignmentsProps {
 }
 
 export default function CampaignAssignments({ currentUser }: CampaignAssignmentsProps) {
-  const { campaigns, assignments, addCampaign, addAssignment, deleteAssignment } = useCampaigns();
-  const { challenges } = useChallenges();
+  const dispatch = useDispatch<AppDispatch>();
+  const campaigns = useSelector((state: any) => state.campaigns.campaigns);
+  const assignments = useSelector((state: any) => state.campaigns.assignments);
+  const challenges = useSelector((state: any) => state.challenges.challenges);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [challengeId, setChallengeId] = useState(challenges[0]?.id ?? '');
@@ -19,28 +22,32 @@ export default function CampaignAssignments({ currentUser }: CampaignAssignments
   const handleCreateCampaign = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    addCampaign({ title: title.trim(), description: description.trim() || 'Training campaign' });
+    dispatch(addCampaign({ title: title.trim(), description: description.trim() || 'Training campaign' }));
     setTitle('');
     setDescription('');
   };
 
   const handleAddAssignment = (e: React.FormEvent) => {
     e.preventDefault();
-    const ch = challenges.find((c) => c.id === challengeId);
+    const ch = challenges.find((c: any) => c.id === challengeId);
     if (!ch || campaigns.length === 0) return;
-    addAssignment({
+    dispatch(addAssignment({
       campaignId: campaigns[0].id,
       userId: 'all',
       challengeId: ch.id,
       title: ch.title,
       dueDate,
-    });
+    }));
   };
 
   return (
     <div className="space-y-8">
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
-        Demo data: assignments are stored in this browser only (localStorage). No server sync.
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
+        <strong>Learner dashboard:</strong> when the app uses the gamification API, assigned training is loaded from the
+        database (<code className="text-xs bg-white px-1 rounded border">GET /gamification/assignments/me</code>). Admins
+        can create rows with{' '}
+        <code className="text-xs bg-white px-1 rounded border">POST /gamification/assignments</code>. The forms below
+        still save to this browser (localStorage) for quick demos unless you wire them to that API.
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -90,7 +97,7 @@ export default function CampaignAssignments({ currentUser }: CampaignAssignments
               value={challengeId}
               onChange={(e) => setChallengeId(e.target.value)}
             >
-              {challenges.map((c) => (
+              {challenges.map((c: any) => (
                 <option key={c.id} value={c.id}>
                   {c.title}
                 </option>
@@ -124,7 +131,7 @@ export default function CampaignAssignments({ currentUser }: CampaignAssignments
           <p className="text-gray-500 text-sm">No assignments yet.</p>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {assignments.map((a) => (
+            {assignments.map((a: any) => (
               <li key={a.id} className="py-3 flex flex-wrap justify-between gap-2 items-center">
                 <div>
                   <div className="font-medium text-gray-900">{a.title}</div>
@@ -134,7 +141,7 @@ export default function CampaignAssignments({ currentUser }: CampaignAssignments
                 </div>
                 <button
                   type="button"
-                  onClick={() => deleteAssignment(a.id)}
+                  onClick={() => dispatch(deleteAssignment(a.id))}
                   className="text-red-600 hover:text-red-800 p-2"
                   aria-label="Remove assignment"
                 >

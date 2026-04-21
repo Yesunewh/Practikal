@@ -1,21 +1,60 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useChallenges } from '../context/ChallengeContext';
+import { useMemo } from 'react';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
+import { selectChallengeAttemptsRaw } from '../store/slices/progressSlice';
 import { getRemediationItems } from '../utils/remediation';
 import { AlertCircle, ArrowRight } from 'lucide-react';
+import { useGetGamificationProgressMeQuery } from '../store/apiSlice/practikalApi';
+import { useGamificationApi } from '../config/gamification';
+import { mapGamificationAttemptsToChallengeAttempts, type GamificationProgressAttemptDto } from '../utils/gamificationApi';
+import type { Challenge } from '../types';
 
 interface RemediationPageProps {
   onNavigate: (page: string) => void;
 }
 
 export default function RemediationPage({ onNavigate }: RemediationPageProps) {
-  const { user } = useAuth();
-  const { challenges } = useChallenges();
+  const user = useSelector((state: RootState) => state.auth.user);
+  const reduxChallenges = useSelector((state: RootState) => state.challenges.challenges);
+  const rawLocal = useSelector(selectChallengeAttemptsRaw);
+
+  const { data: progressData, isFetching, isError, isSuccess } = useGetGamificationProgressMeQuery(undefined, {
+    skip: !useGamificationApi || !user,
+  });
+
+  const { mergedChallenges, rawAttempts, usedServer } = useMemo(() => {
+    if (!user) {
+      return { mergedChallenges: [] as Challenge[], rawAttempts: [] as unknown[], usedServer: false };
+    }
+    if (useGamificationApi && isSuccess && progressData) {
+      const attempts = (progressData.attempts ?? []) as GamificationProgressAttemptDto[];
+      const mapped = mapGamificationAttemptsToChallengeAttempts(attempts);
+      const map = new Map<string, Challenge>(reduxChallenges.map((c) => [c.id, c]));
+      for (const row of attempts) {
+        const ch = row.challenge;
+        if (ch?.id && !map.has(ch.id)) {
+          map.set(ch.id, ch);
+        }
+      }
+      return {
+        mergedChallenges: Array.from(map.values()),
+        rawAttempts: mapped as unknown[],
+        usedServer: true,
+      };
+    }
+    if (useGamificationApi) {
+      return {
+        mergedChallenges: reduxChallenges,
+        rawAttempts: rawLocal as unknown[],
+        usedServer: false,
+      };
+    }
+    return { mergedChallenges: reduxChallenges, rawAttempts: rawLocal as unknown[], usedServer: false };
+  }, [user, useGamificationApi, isSuccess, progressData, reduxChallenges, rawLocal]);
 
   if (!user) return null;
 
-  const raw = JSON.parse(localStorage.getItem('challengeAttempts') || '[]');
-  const items = getRemediationItems(user.id, challenges, raw);
+  const items = getRemediationItems(user.id, mergedChallenges, rawAttempts);
 
   const openChallenge = (challengeId: string) => {
     sessionStorage.setItem('practikal-focus-challenge', challengeId);
@@ -30,9 +69,24 @@ export default function RemediationPage({ onNavigate }: RemediationPageProps) {
           Steps you answered incorrectly on past attempts. Retry the challenge to improve your score.
         </p>
 
+        {useGamificationApi && isFetching && (
+          <p className="text-sm text-gray-500 mb-4">Loading your attempts from the server…</p>
+        )}
+
+        {useGamificationApi && isError && !usedServer && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4" role="alert">
+            Could not load attempts from the server. Showing locally stored attempts only, if any.
+          </p>
+        )}
+
+        {useGamificationApi && usedServer && !isFetching && (progressData?.attempts?.length ?? 0) === 0 && (
+          <p className="text-sm text-gray-500 mb-4">No challenge attempts on your account yet.</p>
+        )}
+
         {items.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-            No missed steps recorded yet. Complete challenges to build your review list.
+            No missed steps recorded yet. Complete challenges (with the app connected to the server) to build your
+            review list.
           </div>
         ) : (
           <ul className="space-y-3">
@@ -46,8 +100,7 @@ export default function RemediationPage({ onNavigate }: RemediationPageProps) {
                   <div>
                     <div className="font-medium text-gray-900">{item.challengeTitle}</div>
                     <div className="text-sm text-gray-500">
-                      Step {item.stepId} · {item.category} ·{' '}
-                      {item.completedAt.toLocaleDateString()}
+                      Step {item.stepId} · {item.category} · {item.completedAt.toLocaleDateString()}
                     </div>
                   </div>
                 </div>

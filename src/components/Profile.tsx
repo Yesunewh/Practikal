@@ -1,13 +1,16 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
+import { selectPassedChallengeIds } from '../store/slices/progressSlice';
 import { User, Mail, Building2, Calendar, Trophy, Target, Flame } from 'lucide-react';
 
 export default function Profile() {
-  const { user } = useAuth();
+  const user = useSelector((state: RootState) => state.auth.user);
+  const passedIds = useSelector(selectPassedChallengeIds(user?.id || ''));
 
   if (!user) return null;
 
-  const levelProgress = (user.xp / user.xpToNextLevel) * 100;
+  const levelProgress =
+    user.xpToNextLevel > 0 ? Math.min(100, (user.xp / user.xpToNextLevel) * 100) : 100;
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-auto">
@@ -53,7 +56,7 @@ export default function Profile() {
                   <div className="text-center">
                     <div className="flex items-center justify-center gap-2 mb-1">
                       <Trophy className="text-yellow-500" size={20} />
-                      <span className="text-2xl font-bold">{user.completedChallenges.length}</span>
+                      <span className="text-2xl font-bold">{passedIds.size}</span>
                     </div>
                     <p className="text-sm text-gray-600">Challenges Completed</p>
                   </div>

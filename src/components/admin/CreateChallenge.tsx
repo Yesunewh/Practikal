@@ -1,6 +1,17 @@
 import { useState } from 'react';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Check } from 'lucide-react';
-import { Challenge, ChallengeStep, QuestionContent } from '../../types';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Check, ClipboardList, FileText, ListOrdered, Loader2 } from 'lucide-react';
+import {
+  Challenge,
+  ChallengeStep,
+  ImageVerificationContent,
+  InformationContent,
+  QuestionContent,
+  ScenarioContent,
+  SequentialContent,
+  SimulationContent,
+} from '../../types';
+import { validateQuestionContent, validateScenarioContent } from '../../utils/validateQuestionStepContent';
+import toast from 'react-hot-toast';
 import { questionKindLabel } from '../../constants/questionKinds';
 import ChallengeTypeTemplates from './ChallengeTypeTemplates';
 import QuizBuilder from './builders/QuizBuilder';
@@ -11,11 +22,11 @@ import PasswordBuilder from './builders/PasswordBuilder';
 import SimulationBuilder from './builders/SimulationBuilder';
 
 interface CreateChallengeProps {
-  onSave: (challenge: Partial<Challenge>) => void;
+  onSave: (challenge: Partial<Challenge>) => void | Promise<void>;
   onCancel: () => void;
+  /** When set, form opens on Basic Info with this data and saves update the same challenge id. */
+  initialChallenge?: Challenge | null;
 }
-
-type StepType = 'question' | 'information' | 'password-create' | 'scenario' | 'sequential' | 'image-verification';
 
 function stepSummaryLine(step: ChallengeStep): string {
   if (step.type === 'question') {
@@ -25,14 +36,51 @@ function stepSummaryLine(step: ChallengeStep): string {
     const short = q.length > 90 ? `${q.slice(0, 90)}…` : q;
     return `${kind}: ${short}`;
   }
-  const raw = (step.content as { question?: string }).question;
+  if (step.type === 'simulation') {
+    const c = step.content as SimulationContent;
+    const kind = formatDisplayLabel(c.simulationType);
+    const t = (c.title || '').trim() || 'Untitled simulation';
+    const short = t.length > 90 ? `${t.slice(0, 90)}…` : t;
+    return `${kind} simulation · ${short}`;
+  }
+  if (step.type === 'scenario') {
+    const c = step.content as ScenarioContent;
+    const s = (c.situation || '').trim() || 'Untitled scenario';
+    const short = s.length > 90 ? `${s.slice(0, 90)}…` : s;
+    return `Scenario: ${short}`;
+  }
+  if (step.type === 'sequential') {
+    const c = step.content as SequentialContent;
+    const q = (c.question || '').trim() || 'Untitled';
+    const short = q.length > 90 ? `${q.slice(0, 90)}…` : q;
+    return `Sequential: ${short}`;
+  }
+  if (step.type === 'image-verification') {
+    const c = step.content as ImageVerificationContent;
+    const q = (c.question || '').trim() || 'Untitled';
+    const short = q.length > 90 ? `${q.slice(0, 90)}…` : q;
+    return `Image check: ${short}`;
+  }
+  if (step.type === 'information') {
+    const c = step.content as InformationContent;
+    const t = (c.title || '').trim() || 'Information step';
+    const short = t.length > 90 ? `${t.slice(0, 90)}…` : t;
+    return short;
+  }
+  const raw = (step.content as { question?: string }).question?.trim();
   return raw || 'Untitled step';
 }
 
-export default function CreateChallenge({ onSave, onCancel }: CreateChallengeProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [showBuilder, setShowBuilder] = useState(false);
-  const [challengeData, setChallengeData] = useState({
+function formatDisplayLabel(value: string) {
+  return value
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function emptyChallengeData() {
+  return {
     title: '',
     description: '',
     type: 'quiz' as Challenge['type'],
@@ -41,67 +89,52 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
     duration: 10,
     difficulty: 'beginner' as Challenge['difficulty'],
     category: 'general' as Challenge['category'],
-    steps: [] as ChallengeStep[]
-  });
+    steps: [] as ChallengeStep[],
+  };
+}
 
-  const [currentStepData, setCurrentStepData] = useState<any>({
-    type: 'question' as StepType,
-    question: '',
-    options: [{ id: '1', text: '', isCorrect: false }],
-    explanation: ''
-  });
+function challengeToFormState(ch: Challenge): ReturnType<typeof emptyChallengeData> {
+  return {
+    title: ch.title ?? '',
+    description: ch.description ?? '',
+    type: (ch.type || 'quiz') as Challenge['type'],
+    xpReward: ch.xpReward ?? 100,
+    reputationReward: ch.reputationReward ?? 5,
+    duration: ch.duration ?? 10,
+    difficulty: (ch.difficulty || 'beginner') as Challenge['difficulty'],
+    category: (ch.category || 'general') as Challenge['category'],
+    steps: Array.isArray(ch.steps) ? (ch.steps.map((s) => ({ ...s })) as ChallengeStep[]) : [],
+  };
+}
+
+function getStepsValidationError(steps: ChallengeStep[]): string | null {
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    if (step.type === 'question') {
+      const msg = validateQuestionContent(step.content as QuestionContent);
+      if (msg) return `Step ${i + 1} (quiz): ${msg}`;
+    }
+    if (step.type === 'scenario') {
+      const msg = validateScenarioContent(step.content as ScenarioContent);
+      if (msg) return `Step ${i + 1} (scenario): ${msg}`;
+    }
+  }
+  return null;
+}
+
+export default function CreateChallenge({ onSave, onCancel, initialChallenge = null }: CreateChallengeProps) {
+  const isEditMode = Boolean(initialChallenge?.id);
+  const minStep = isEditMode ? 1 : 0;
+
+  const [currentStep, setCurrentStep] = useState(() => (isEditMode ? 1 : 0));
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [challengeData, setChallengeData] = useState(() =>
+    initialChallenge ? challengeToFormState(initialChallenge) : emptyChallengeData(),
+  );
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const handleBasicInfoChange = (field: string, value: any) => {
     setChallengeData({ ...challengeData, [field]: value });
-  };
-
-  const addOption = () => {
-    setCurrentStepData({
-      ...currentStepData,
-      options: [...currentStepData.options, { id: Date.now().toString(), text: '', isCorrect: false }]
-    });
-  };
-
-  const removeOption = (id: string) => {
-    setCurrentStepData({
-      ...currentStepData,
-      options: currentStepData.options.filter((opt: any) => opt.id !== id)
-    });
-  };
-
-  const updateOption = (id: string, field: string, value: any) => {
-    setCurrentStepData({
-      ...currentStepData,
-      options: currentStepData.options.map((opt: any) => 
-        opt.id === id ? { ...opt, [field]: value } : opt
-      )
-    });
-  };
-
-  const addStepToChallenge = () => {
-    const newStep: ChallengeStep = {
-      id: Date.now().toString(),
-      type: currentStepData.type,
-      content: {
-        question: currentStepData.question,
-        options: currentStepData.options,
-        multipleAnswers: false
-      },
-      explanation: currentStepData.explanation
-    };
-
-    setChallengeData({
-      ...challengeData,
-      steps: [...challengeData.steps, newStep]
-    });
-
-    // Reset step data
-    setCurrentStepData({
-      type: 'question',
-      question: '',
-      options: [{ id: '1', text: '', isCorrect: false }],
-      explanation: ''
-    });
   };
 
   const removeStep = (index: number) => {
@@ -111,20 +144,74 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
     });
   };
 
-  const handleSave = () => {
-    // Validate that we have at least one step
+  const handleSave = async () => {
+    if (isPublishing) return;
+
     if (challengeData.steps.length === 0) {
-      alert('Please add at least one step to your challenge before publishing.');
+      toast.error('Add at least one step before publishing.');
       return;
     }
-    
-    // Validate basic info
-    if (!challengeData.title || !challengeData.description) {
-      alert('Please fill in the title and description.');
+
+    if (!challengeData.title?.trim() || !challengeData.description?.trim()) {
+      toast.error('Title and description are required.');
       return;
     }
-    
-    onSave(challengeData);
+
+    const stepErr = getStepsValidationError(challengeData.steps);
+    if (stepErr) {
+      toast.error(stepErr);
+      return;
+    }
+
+    setIsPublishing(true);
+    try {
+      await Promise.resolve(onSave(challengeData));
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const tryAdvanceStep = () => {
+    if (currentStep === 1) {
+      if (!challengeData.title?.trim() || !challengeData.description?.trim()) {
+        toast.error('Title and description are required.');
+        return;
+      }
+      const duration = Number(challengeData.duration);
+      if (!Number.isFinite(duration) || duration < 1) {
+        toast.error('Duration must be at least 1 minute.');
+        return;
+      }
+      const xp = Number(challengeData.xpReward);
+      const rep = Number(challengeData.reputationReward);
+      if (!Number.isFinite(xp) || xp < 0) {
+        toast.error('XP reward must be 0 or greater.');
+        return;
+      }
+      if (!Number.isFinite(rep) || rep < 0) {
+        toast.error('Reputation reward must be 0 or greater.');
+        return;
+      }
+      setCurrentStep(2);
+      return;
+    }
+
+    if (currentStep === 2) {
+      if (showBuilder) {
+        toast.error('Finish or cancel the step builder before continuing.');
+        return;
+      }
+      if (challengeData.steps.length === 0) {
+        toast.error('Add at least one step before continuing.');
+        return;
+      }
+      const stepErr = getStepsValidationError(challengeData.steps);
+      if (stepErr) {
+        toast.error(stepErr);
+        return;
+      }
+      setCurrentStep(3);
+    }
   };
 
   const handleTypeSelect = (type: string) => {
@@ -139,10 +226,7 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
     switch (currentStep) {
       case 0:
         return (
-          <ChallengeTypeTemplates
-            onSelectType={handleTypeSelect}
-            onBack={onCancel}
-          />
+          <ChallengeTypeTemplates onSelectType={handleTypeSelect} onCancel={onCancel} />
         );
       
       case 1:
@@ -177,19 +261,18 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                <select
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={challengeData.type}
-                  onChange={(e) => handleBasicInfoChange('type', e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Challenge type</label>
+                <div
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 capitalize"
+                  title="Set on the previous step"
                 >
-                  <option value="quiz">Quiz</option>
-                  <option value="scenario">Scenario</option>
-                  <option value="password">Password</option>
-                  <option value="simulation">Simulation</option>
-                  <option value="sequential">Sequential</option>
-                  <option value="verification">Verification</option>
-                </select>
+                  {challengeData.type}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {isEditMode
+                    ? 'Type is fixed for this challenge.'
+                    : 'Chosen on the type screen — use Previous to change it.'}
+                </p>
               </div>
 
               <div>
@@ -318,103 +401,6 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
               </button>
             </div>
 
-            {/* Current Step Being Created - OLD CODE REMOVED */}
-            <div className="border rounded-lg p-6 bg-gray-50" style={{ display: 'none' }}>
-              <h4 className="font-medium text-gray-700 mb-4">Create New Step</h4>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Step Type</label>
-                  <select
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    value={currentStepData.type}
-                    onChange={(e) => setCurrentStepData({ ...currentStepData, type: e.target.value })}
-                  >
-                    <option value="question">Multiple Choice Question</option>
-                    <option value="information">Information</option>
-                    <option value="scenario">Scenario</option>
-                    <option value="sequential">Sequential Ordering</option>
-                    <option value="image-verification">Image Verification</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Question/Prompt *</label>
-                  <textarea
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    rows={3}
-                    placeholder="Enter your question..."
-                    value={currentStepData.question}
-                    onChange={(e) => setCurrentStepData({ ...currentStepData, question: e.target.value })}
-                  />
-                </div>
-
-                {currentStepData.type === 'question' && (
-                  <div>
-                    <div className="flex justify-between items-center mb-3">
-                      <label className="block text-sm font-medium text-gray-700">Answer Options</label>
-                      <button
-                        onClick={addOption}
-                        className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center font-medium"
-                      >
-                        <Plus size={16} className="mr-1" />
-                        Add Option
-                      </button>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      {currentStepData.options.map((option: any, index: number) => (
-                        <div key={option.id} className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={option.isCorrect}
-                            onChange={(e) => updateOption(option.id, 'isCorrect', e.target.checked)}
-                            className="h-5 w-5 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
-                          />
-                          <input
-                            type="text"
-                            className="flex-1 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                            placeholder={`Option ${index + 1}`}
-                            value={option.text}
-                            onChange={(e) => updateOption(option.id, 'text', e.target.value)}
-                          />
-                          {currentStepData.options.length > 1 && (
-                            <button
-                              onClick={() => removeOption(option.id)}
-                              className="text-red-600 hover:text-red-700 p-2"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">✓ Check the box for correct answer(s)</p>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Explanation (optional)</label>
-                  <textarea
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    rows={3}
-                    placeholder="Explain the correct answer..."
-                    value={currentStepData.explanation}
-                    onChange={(e) => setCurrentStepData({ ...currentStepData, explanation: e.target.value })}
-                  />
-                </div>
-
-                <button
-                  onClick={addStepToChallenge}
-                  className="w-full bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 flex items-center justify-center font-medium"
-                  disabled={!currentStepData.question}
-                >
-                  <Plus size={18} className="mr-2" />
-                  Add This Step to Challenge
-                </button>
-              </div>
-            </div>
-
             {/* List of Added Steps */}
             {challengeData.steps.length > 0 && (
               <div className="border rounded-lg p-6">
@@ -447,84 +433,94 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
 
       case 3:
         return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-xl font-semibold text-gray-800">Review & Publish</h3>
-              <p className="text-sm text-gray-500 mt-1">Review your challenge before publishing</p>
+          <div className="space-y-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800">Review & publish</h3>
+                <p className="text-sm text-gray-500 mt-1 max-w-xl">
+                  Confirm basic info, read the description, and skim steps in order. Use <span className="font-medium text-gray-700">Previous</span> if anything needs a change.
+                </p>
+              </div>
+              <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                {challengeData.steps.length} step{challengeData.steps.length === 1 ? '' : 's'}
+              </span>
             </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="border rounded-lg p-6 bg-gray-50">
-                <h4 className="font-medium text-gray-700 mb-4">Challenge Summary</h4>
-                
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Title:</span>
-                    <span className="font-medium text-right">{challengeData.title || 'Not set'}</span>
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                    <ClipboardList className="h-5 w-5" aria-hidden />
                   </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Type:</span>
-                    <span className="font-medium capitalize">{challengeData.type}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Difficulty:</span>
-                    <span className="font-medium capitalize">{challengeData.difficulty}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Category:</span>
-                    <span className="font-medium capitalize">{challengeData.category}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Duration:</span>
-                    <span className="font-medium">{challengeData.duration} minutes</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Rewards:</span>
-                    <span className="font-medium">{challengeData.xpReward} XP, {challengeData.reputationReward} Rep</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600">Total Steps:</span>
-                    <span className="font-medium">{challengeData.steps.length}</span>
-                  </div>
+                  <h4 className="font-semibold text-gray-800">Challenge summary</h4>
                 </div>
+                <dl className="divide-y divide-gray-100 text-sm">
+                  {[
+                    ['Title', challengeData.title?.trim() || 'Not set'],
+                    ['Type', formatDisplayLabel(challengeData.type)],
+                    ['Difficulty', formatDisplayLabel(challengeData.difficulty)],
+                    ['Category', formatDisplayLabel(challengeData.category)],
+                    ['Duration', `${challengeData.duration} min`],
+                    ['Rewards', `${challengeData.xpReward} XP · ${challengeData.reputationReward} rep`],
+                    ['Total steps', String(challengeData.steps.length)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex flex-col gap-0.5 py-3 first:pt-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                      <dt className="shrink-0 text-gray-500">{label}</dt>
+                      <dd className="font-medium text-gray-900 text-right break-words sm:max-w-[60%]">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
 
-              <div className="border rounded-lg p-6">
-                <h4 className="font-medium text-gray-700 mb-4">Description</h4>
-                <p className="text-sm text-gray-600">{challengeData.description || 'No description provided'}</p>
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                    <FileText className="h-5 w-5" aria-hidden />
+                  </div>
+                  <h4 className="font-semibold text-gray-800">Description</h4>
+                </div>
+                <div className="max-h-52 min-h-[7.5rem] overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/90 px-4 py-3">
+                  {challengeData.description?.trim() ? (
+                    <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{challengeData.description}</p>
+                  ) : (
+                    <p className="text-sm italic text-gray-500">No description provided.</p>
+                  )}
+                </div>
               </div>
             </div>
 
             {challengeData.steps.length > 0 && (
-              <div className="border rounded-lg p-6">
-                <h4 className="font-medium text-gray-700 mb-4">Steps Preview</h4>
-                <div className="space-y-3">
-                  {challengeData.steps.map((step, index) => (
-                    <div key={step.id} className="p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-medium text-gray-500">Step {index + 1}</span>
-                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">
-                          {step.type}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-700">{stepSummaryLine(step)}</p>
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                      <ListOrdered className="h-5 w-5" aria-hidden />
                     </div>
-                  ))}
+                    <h4 className="font-semibold text-gray-800">Steps</h4>
+                  </div>
                 </div>
+                <ul className="space-y-3">
+                  {challengeData.steps.map((step, index) => (
+                    <li
+                      key={step.id}
+                      className="flex gap-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4 transition-colors hover:border-emerald-200/90"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-sm">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-semibold capitalize text-emerald-800">
+                            {step.type}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800">{stepSummaryLine(step)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
-
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-6">
-              <div className="flex items-start">
-                <Check className="text-emerald-600 mr-3 mt-0.5 flex-shrink-0" size={24} />
-                <div>
-                  <h4 className="font-medium text-emerald-800 text-lg">Ready to Publish</h4>
-                  <p className="text-sm text-emerald-700 mt-1">
-                    Your challenge is ready to be published. Users will be able to access it immediately after you click the publish button.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         );
 
@@ -534,25 +530,7 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-xl">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-900 to-black p-8 rounded-t-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-2">Create New Challenge</h2>
-            <p className="text-lime-300 text-base font-medium">
-              {currentStep === 0 ? '🎯 Choose a challenge type' : `Step ${currentStep} of 3`}
-            </p>
-          </div>
-          <button 
-            onClick={onCancel} 
-            className="text-gray-400 hover:text-white px-4 py-2 rounded-lg hover:bg-white/10 transition-colors font-medium"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-
+    <div className="rounded-xl bg-white shadow-xl">
       {/* Progress Bar */}
       {currentStep > 0 && (
         <div className="px-8 pt-6 pb-4 bg-gray-50">
@@ -600,8 +578,9 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
       {currentStep > 0 && (
         <div className="p-8 border-t-2 bg-gray-50 flex justify-between rounded-b-xl">
           <button
-            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
-            disabled={currentStep === 0}
+            type="button"
+            onClick={() => setCurrentStep(Math.max(minStep, currentStep - 1))}
+            disabled={currentStep <= minStep || isPublishing}
             className="flex items-center px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-white hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all shadow-sm hover:shadow-md"
           >
             <ArrowLeft size={20} className="mr-2" />
@@ -610,15 +589,18 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
 
           <div className="flex gap-4">
             <button
+              type="button"
               onClick={onCancel}
-              className="px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-white hover:border-gray-400 font-semibold transition-all shadow-sm hover:shadow-md"
+              disabled={isPublishing}
+              className="px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-white hover:border-gray-400 font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             
             {currentStep < 3 ? (
               <button
-                onClick={() => setCurrentStep(currentStep + 1)}
+                type="button"
+                onClick={tryAdvanceStep}
                 className="flex items-center px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 font-bold shadow-lg hover:shadow-xl transition-all"
               >
                 Next Step
@@ -626,11 +608,23 @@ export default function CreateChallenge({ onSave, onCancel }: CreateChallengePro
               </button>
             ) : (
               <button
-                onClick={handleSave}
-                className="flex items-center px-8 py-3 bg-gradient-to-r from-lime-500 to-emerald-600 text-black rounded-xl hover:from-lime-400 hover:to-emerald-500 font-bold shadow-xl hover:shadow-2xl transition-all"
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isPublishing}
+                aria-busy={isPublishing}
+                className="flex items-center px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-50 disabled:cursor-not-allowed disabled:opacity-90"
               >
-                <Check size={20} className="mr-2" />
-                Publish Challenge
+                {isPublishing ? (
+                  <>
+                    <Loader2 size={20} className="mr-2 shrink-0 animate-spin" aria-hidden />
+                    {isEditMode ? 'Saving…' : 'Publishing…'}
+                  </>
+                ) : (
+                  <>
+                    <Check size={20} className="mr-2 shrink-0" strokeWidth={2.5} aria-hidden />
+                    {isEditMode ? 'Save changes' : 'Publish Challenge'}
+                  </>
+                )}
               </button>
             )}
           </div>

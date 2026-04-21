@@ -3,7 +3,7 @@ import { FileText, AlertTriangle, Lock, List, Image as ImageIcon, HelpCircle, Ar
 
 interface ChallengeTypeTemplatesProps {
   onSelectType: (type: string) => void;
-  onBack: () => void;
+  onCancel: () => void;
 }
 
 interface ChallengeTypeTemplate {
@@ -103,7 +103,7 @@ const typeTemplates: ChallengeTypeTemplate[] = [
   }
 ];
 
-export default function ChallengeTypeTemplates({ onSelectType, onBack }: ChallengeTypeTemplatesProps) {
+export default function ChallengeTypeTemplates({ onSelectType, onCancel }: ChallengeTypeTemplatesProps) {
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [hoveredType, setHoveredType] = useState<string | null>(null);
 
@@ -115,9 +115,15 @@ export default function ChallengeTypeTemplates({ onSelectType, onBack }: Challen
 
   return (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-xl p-8 text-white">
-        <h3 className="text-3xl font-bold mb-3">Choose Challenge Type</h3>
-        <p className="text-emerald-100 text-lg">Select the type of challenge you want to create. Each type has a unique layout and interaction style.</p>
+      <div className="flex flex-col gap-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 p-6 text-white sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-2xl font-bold tracking-tight">Choose Challenge Type</h3>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="shrink-0 rounded-lg border border-white/40 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+        >
+          Cancel
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -186,50 +192,15 @@ export default function ChallengeTypeTemplates({ onSelectType, onBack }: Challen
         })}
       </div>
 
-      {/* Selected Type Details */}
-      {selectedType && (
-        <div className="bg-gradient-to-r from-lime-50 to-emerald-50 border-2 border-lime-300 rounded-xl p-6 shadow-lg">
-          <div className="flex items-start gap-4">
-            <div className="bg-white rounded-xl p-4 shadow-md">
-              {(() => {
-                const template = typeTemplates.find(t => t.id === selectedType);
-                const Icon = template?.icon;
-                return Icon ? <Icon size={36} className="text-emerald-600" /> : null;
-              })()}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <Check size={20} className="text-lime-600" />
-                <h4 className="font-bold text-xl text-gray-900">
-                  {typeTemplates.find(t => t.id === selectedType)?.name} Selected
-                </h4>
-              </div>
-              <p className="text-gray-700 text-base mb-3">
-                {typeTemplates.find(t => t.id === selectedType)?.description}
-              </p>
-              <p className="text-emerald-700 text-sm font-medium">
-                → Click "Continue" to start building your {typeTemplates.find(t => t.id === selectedType)?.name.toLowerCase()}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Navigation */}
-      <div className="flex justify-between items-center pt-6 border-t-2">
+      <div className="flex justify-end border-t-2 pt-6">
         <button
-          onClick={onBack}
-          className="px-6 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          ← Back
-        </button>
-        
-        <button
+          type="button"
           onClick={handleContinue}
           disabled={!selectedType}
-          className="flex items-center px-8 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg shadow-xl hover:shadow-2xl transition-all disabled:hover:shadow-xl"
+          className="flex items-center px-8 py-4 text-lg font-bold shadow-xl transition-all hover:shadow-2xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800"
         >
-          Continue with {selectedType && typeTemplates.find(t => t.id === selectedType)?.name}
+          Continue with {selectedType && typeTemplates.find((t) => t.id === selectedType)?.name}
           <ArrowRight size={22} className="ml-2" />
         </button>
       </div>

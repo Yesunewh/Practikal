@@ -1,12 +1,21 @@
-import { useState, useRef, useEffect } from 'react';
+import { useLocation, Navigate } from 'react-router-dom';
 import { User } from '../../types';
-import { Users, BookOpen, Settings, BarChart2, Bell, Shield, ArrowLeft, FileText, ChevronLeft, ChevronRight, TrendingUp, Megaphone } from 'lucide-react';
+import { Users, BookOpen, Shield, BarChart2, TrendingUp } from 'lucide-react';
+
 import UserManagement from './UserManagement';
-import ChallengeManagement from './ChallengeManagement';
 import SystemSettings from './SystemSettings';
-import ExamBank from './ExamBank';
+import ChallengesExamHub from './ChallengesExamHub';
 import UserProgressReport from './UserProgressReport';
 import CampaignAssignments from './CampaignAssignments';
+import OrgManagement from './OrgManagement';
+import DepartmentManagement from './DepartmentManagement';
+import BranchManagement from './BranchManagement';
+import RoleManagement from './RoleManagement';
+import UnitTypeConfigurator from './UnitTypeConfigurator';
+import PermissionManager from './PermissionManager';
+import BulkUserImport from './BulkUserImport';
+import PendingRegistrations from './PendingRegistrations';
+
 import { downloadCsv } from '../../utils/csv';
 import { reviveAttempts } from '../../utils/progressCalculations';
 
@@ -16,22 +25,39 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ currentUser, onBack }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'users' | 'challenges' | 'exams' | 'reports' | 'progress' | 'settings' | 'assignments'
-  >('overview');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotificationsOpen(false);
-    };
-    document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
-  }, []);
-  
+  if (location.pathname === '/admin/exams') {
+    return <Navigate to="/admin/challenges?tab=bank" replace />;
+  }
+
+  // Derive activeTab from URL
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/admin') return 'overview';
+    const sub = path.replace('/admin/', '');
+    if (sub === 'exams') return 'challenges';
+    // Mapping for UI naming consistency
+    if (sub === 'import') return 'bulk';
+    if (sub === 'pending-users') return 'pending-users';
+    // Sidebar links to /admin/campaigns; content lives under the legacy "assignments" tab id
+    if (sub === 'campaigns') return 'assignments';
+    if (sub === 'departments') return 'departments';
+    return sub;
+  };
+
+  const activeTab = getActiveTab();
+
   const isSuperAdmin = currentUser.role === 'superadmin';
+  const isOrgAdmin = currentUser.user_type === 'ORG_ADMIN';
+  const canAccessTerminology = isSuperAdmin || isOrgAdmin;
+  const canUseDepartments =
+    isSuperAdmin ||
+    currentUser.user_type === 'ORG_ADMIN' ||
+    currentUser.user_type === 'DEPT_ADMIN' ||
+    (currentUser.role === 'admin' &&
+      !!currentUser.deptId &&
+      (currentUser.user_type == null || currentUser.user_type === ''));
   
   // Stats for the overview dashboard
   const stats = {
@@ -39,180 +65,12 @@ export default function AdminDashboard({ currentUser, onBack }: AdminDashboardPr
     activeUsers: 876,
     completedChallenges: 8721,
     averageScore: 78,
-    pendingApprovals: 5
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-100 flex z-50">
-      {/* Sidebar */}
-      <div className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-black text-white ${isSidebarCollapsed ? 'p-3' : 'p-6'} flex flex-col fixed left-0 top-0 h-screen overflow-y-auto z-20 transition-all duration-300`}>
-        {/* Toggle Button */}
-        <button
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="absolute -right-3 top-8 bg-lime-400 text-black rounded-full p-1.5 shadow-lg hover:bg-lime-300 transition-colors z-10"
-          title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
-
-        <div className="flex items-center gap-2 mb-8">
-          <Shield size={24} className="flex-shrink-0" />
-          {!isSidebarCollapsed && (
-            <div>
-              <h1 className="text-xl font-bold">Practikal Admin</h1>
-              <p className="text-xs text-emerald-300">{currentUser.role === 'superadmin' ? 'Super Admin' : 'Admin'}</p>
-            </div>
-          )}
-        </div>
-        
-        <nav className="space-y-4 flex-1">
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'overview' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('overview')}
-            title="Dashboard Overview"
-          >
-            <BarChart2 size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>Dashboard Overview</span>}
-          </button>
-          
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'users' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('users')}
-            title="User Management"
-          >
-            <Users size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>User Management</span>}
-          </button>
-          
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'challenges' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('challenges')}
-            title="Challenge Management"
-          >
-            <BookOpen size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>Challenge Management</span>}
-          </button>
-          
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'exams' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('exams')}
-            title="Exam Bank"
-          >
-            <FileText size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>Exam Bank</span>}
-          </button>
-
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'assignments' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('assignments')}
-            title="Campaigns & assignments"
-          >
-            <Megaphone size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>Campaigns</span>}
-          </button>
-          
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'reports' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('reports')}
-            title="Reports & Analytics"
-          >
-            <BarChart2 size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>Reports & Analytics</span>}
-          </button>
-
-          <button
-            className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'progress' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-            onClick={() => setActiveTab('progress')}
-            title="User Progress"
-          >
-            <TrendingUp size={20} className="flex-shrink-0" />
-            {!isSidebarCollapsed && <span>User Progress</span>}
-          </button>
-          
-          {isSuperAdmin && (
-            <button
-              className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 rounded-lg w-full text-left transition-colors ${activeTab === 'settings' ? 'bg-lime-300/20 text-lime-300' : 'hover:bg-white/10'}`}
-              onClick={() => setActiveTab('settings')}
-              title="System Configuration"
-            >
-              <Settings size={20} className="flex-shrink-0" />
-              {!isSidebarCollapsed && <span>System Configuration</span>}
-            </button>
-          )}
-        </nav>
-        
-        {/* Back button */}
-        <div className="space-y-2">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-2 hover:bg-white/10 rounded-lg w-full text-left transition-colors`}
-              title="Back to Dashboard"
-            >
-              <ArrowLeft size={20} className="flex-shrink-0" />
-              {!isSidebarCollapsed && <span>Back to Dashboard</span>}
-            </button>
-          )}
-        </div>
-      </div>
-      
-      {/* Main content */}
-      <div className={`flex-1 overflow-auto ${isSidebarCollapsed ? 'ml-20' : 'ml-64'} transition-all duration-300`}>
-        {/* Top bar */}
-        <header className="bg-white border-b shadow-sm py-4 px-6">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">
-              {activeTab === 'overview' && 'Dashboard Overview'}
-              {activeTab === 'users' && 'User Management'}
-              {activeTab === 'challenges' && 'Challenge Management'}
-              {activeTab === 'exams' && 'Exam Bank'}
-              {activeTab === 'reports' && 'Reports & Analytics'}
-              {activeTab === 'progress' && 'User Progress Reports'}
-              {activeTab === 'settings' && 'System Configuration'}
-              {activeTab === 'assignments' && 'Campaigns & assignments'}
-            </h1>
-            <div className="flex items-center space-x-4">
-              <div className="relative" ref={notifRef}>
-                <button
-                  type="button"
-                  className="p-2 rounded-full hover:bg-gray-100 relative"
-                  onClick={() => setNotificationsOpen((o) => !o)}
-                  aria-expanded={notificationsOpen}
-                  aria-haspopup="true"
-                >
-                  <Bell size={20} className="text-gray-600" />
-                  <span className="absolute top-0 right-0 h-4 w-4 bg-red-500 rounded-full flex items-center justify-center text-white text-xs">
-                    {stats.pendingApprovals}
-                  </span>
-                </button>
-                {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-2 text-left">
-                    <div className="px-4 py-2 border-b text-sm font-medium text-gray-800">Notifications (demo)</div>
-                    <div className="px-4 py-3 text-sm text-gray-600 space-y-2 max-h-64 overflow-y-auto">
-                      <p>New user registration pending review.</p>
-                      <p>Assignment &quot;Password Security Basics&quot; due in 3 days for 12 users.</p>
-                      <p className="text-xs text-gray-400">Connect a backend to deliver real notifications.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center text-white">
-                  {currentUser.name.charAt(0)}
-                </div>
-                <span className="text-sm font-medium text-gray-700">{currentUser.name}</span>
-              </div>
-            </div>
-          </div>
-        </header>
-        
-        {/* Dashboard content */}
-        <main className="p-6">
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Demo mode:</strong> user counts, trends, and activity feeds below are illustrative sample data.
-            Challenge attempts and campaigns use browser localStorage only.
-          </div>
-
+    <div className="flex w-full min-h-screen flex-col bg-gray-50">
+      <div className="min-h-0 flex-1 overflow-auto transition-all duration-300">
+        <main className="p-4 sm:p-6">
           {activeTab === 'overview' && (
             <div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -359,52 +217,10 @@ export default function AdminDashboard({ currentUser, onBack }: AdminDashboardPr
             <UserManagement currentUser={currentUser} />
           )}
           
-          {activeTab === 'challenges' && (
-            <ChallengeManagement currentUser={currentUser} />
-          )}
-          
-          {activeTab === 'exams' && (
-            <ExamBank currentUser={currentUser} />
-          )}
+          {activeTab === 'challenges' && <ChallengesExamHub currentUser={currentUser} />}
           
           {activeTab === 'reports' && (
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="p-6 border-b flex flex-wrap justify-between gap-4 items-center">
-                <h2 className="text-lg font-semibold text-gray-800">Reports & Analytics</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const raw = JSON.parse(localStorage.getItem('challengeAttempts') || '[]');
-                    const attempts = reviveAttempts(raw);
-                    const rows = attempts.map((a) => [
-                      a.id,
-                      a.userId,
-                      a.challengeId,
-                      a.score,
-                      a.passed ? 'yes' : 'no',
-                      a.completedAt ? new Date(a.completedAt).toISOString() : '',
-                    ]);
-                    downloadCsv(
-                      ['attemptId', 'userId', 'challengeId', 'score', 'passed', 'completedAt'],
-                      rows,
-                      'practikal-all-attempts.csv',
-                    );
-                  }}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
-                >
-                  Download all attempts (CSV)
-                </button>
-              </div>
-              <div className="p-6">
-                <p className="text-gray-600 mb-4">
-                  Export raw challenge attempts from this browser for analysis. For organization-wide reporting, connect a backend (see roadmap).
-                </p>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'progress' && (
-            <UserProgressReport users={[currentUser]} />
+            <UserProgressReport currentUser={currentUser} />
           )}
 
           {activeTab === 'assignments' && (
@@ -414,6 +230,39 @@ export default function AdminDashboard({ currentUser, onBack }: AdminDashboardPr
           {activeTab === 'settings' && isSuperAdmin && (
             <SystemSettings currentUser={currentUser} />
           )}
+
+          {activeTab === 'organizations' && isSuperAdmin && (
+            <OrgManagement />
+          )}
+
+          {activeTab === 'departments' && canUseDepartments && (
+            <DepartmentManagement currentUser={currentUser} />
+          )}
+
+          {activeTab === 'terminology' && canAccessTerminology && (
+            <UnitTypeConfigurator currentUser={currentUser} />
+          )}
+
+          {activeTab === 'hierarchy' && (
+            <BranchManagement currentUser={currentUser} />
+          )}
+
+          {activeTab === 'roles' && (
+            <RoleManagement currentUser={currentUser} />
+          )}
+
+          {activeTab === 'permissions' && (
+            <PermissionManager currentUser={currentUser} />
+          )}
+
+          {activeTab === 'bulk' && (
+            <BulkUserImport currentUser={currentUser} />
+          )}
+
+          {activeTab === 'pending-users' && (
+            <PendingRegistrations currentUser={currentUser} />
+          )}
+
         </main>
       </div>
     </div>

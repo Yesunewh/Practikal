@@ -1,45 +1,52 @@
 import { useState } from 'react';
 import { LeaderboardEntry } from '../data/leaderboardData';
-import { Award, DollarSign, Image, Target, Flame } from 'lucide-react';
+import { Award, Target, Flame, Zap, Star } from 'lucide-react';
 
 interface LeaderboardTableProps {
   teamData: LeaderboardEntry[];
   companyData: LeaderboardEntry[];
   worldwideData: LeaderboardEntry[];
   userId: string;
+  /** When true, hide team/company/world tabs — data is already scoped (e.g. API org/dept/global). */
+  hideScopeTabs?: boolean;
 }
 
 type ViewType = 'team' | 'company' | 'worldwide';
-type SortField = 'progress' | 'earnings' | 'image' | 'challenges' | 'streak';
+type SortField = 'progress' | 'xp' | 'earnings' | 'challenges' | 'streak';
 
 export default function LeaderboardTable({ 
   teamData, 
   companyData, 
   worldwideData,
-  userId 
+  userId,
+  hideScopeTabs = false,
 }: LeaderboardTableProps) {
   const [view, setView] = useState<ViewType>('team');
-  const [sortField, setSortField] = useState<SortField>('progress');
+  const [sortField, setSortField] = useState<SortField>('xp');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
 
   const teamDepartments = [...new Set(teamData.map((e) => e.department))].sort();
 
   const getActiveData = (): LeaderboardEntry[] => {
     let base: LeaderboardEntry[];
-    switch (view) {
-      case 'team':
-        base = teamData;
-        break;
-      case 'company':
-        base = companyData;
-        break;
-      case 'worldwide':
-        base = worldwideData;
-        break;
-      default:
-        base = teamData;
+    if (hideScopeTabs) {
+      base = teamData;
+    } else {
+      switch (view) {
+        case 'team':
+          base = teamData;
+          break;
+        case 'company':
+          base = companyData;
+          break;
+        case 'worldwide':
+          base = worldwideData;
+          break;
+        default:
+          base = teamData;
+      }
     }
-    if (view === 'team' && departmentFilter !== 'all') {
+    if (!hideScopeTabs && view === 'team' && departmentFilter !== 'all') {
       return base.filter((e) => e.department === departmentFilter);
     }
     return base;
@@ -47,7 +54,7 @@ export default function LeaderboardTable({
 
   return (
     <div>
-      {/* Tab navigation */}
+      {!hideScopeTabs && (
       <div className="flex border-b mb-4">
         <button 
           className={`px-4 py-2 font-medium ${view === 'team' ? 'border-b-2 border-emerald-500 text-emerald-500' : 'text-gray-500'}`}
@@ -68,8 +75,9 @@ export default function LeaderboardTable({
           Worldwide
         </button>
       </div>
+      )}
 
-      {view === 'team' && teamDepartments.length > 0 && (
+      {!hideScopeTabs && view === 'team' && teamDepartments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4 items-center">
           <span className="text-sm text-gray-500 mr-2">Department:</span>
           <button
@@ -102,18 +110,18 @@ export default function LeaderboardTable({
           <span>Progress</span>
         </button>
         <button 
+          className={`flex items-center gap-2 px-2 ${sortField === 'xp' ? 'font-bold' : ''}`}
+          onClick={() => setSortField('xp')}
+        >
+          <Zap className="w-5 h-5" />
+          <span>XP</span>
+        </button>
+        <button 
           className={`flex items-center gap-2 px-2 ${sortField === 'earnings' ? 'font-bold' : ''}`}
           onClick={() => setSortField('earnings')}
         >
-          <DollarSign className="w-5 h-5" />
-          <span>Earnings</span>
-        </button>
-        <button 
-          className={`flex items-center gap-2 px-2 ${sortField === 'image' ? 'font-bold' : ''}`}
-          onClick={() => setSortField('image')}
-        >
-          <Image className="w-5 h-5" />
-          <span>Image</span>
+          <Star className="w-5 h-5" />
+          <span>Reputation</span>
         </button>
         <button 
           className={`flex items-center gap-2 px-2 ${sortField === 'challenges' ? 'font-bold' : ''}`}
@@ -142,24 +150,24 @@ export default function LeaderboardTable({
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {sortField === 'progress' && 'Progress'}
-                {sortField === 'earnings' && 'Earnings'}
-                {sortField === 'image' && 'Image'}
+                {sortField === 'progress' && 'Tier progress'}
+                {sortField === 'xp' && 'XP'}
+                {sortField === 'earnings' && 'Reputation'}
                 {sortField === 'challenges' && 'Challenges'}
                 {sortField === 'streak' && 'Streak'}
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {getActiveData()
+            {[...getActiveData()]
               .sort((a, b) => b[sortField] - a[sortField])
-              .map((entry) => (
+              .map((entry, index) => (
                 <tr 
                   key={entry.id} 
                   className={`${entry.id === userId ? 'bg-emerald-50' : ''} hover:bg-gray-50`}
                 >
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {entry.position}
+                    {index + 1}
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -177,8 +185,8 @@ export default function LeaderboardTable({
                   </td>
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                     {sortField === 'progress' && `${entry.progress}%`}
-                    {sortField === 'earnings' && `€${entry.earnings}`}
-                    {sortField === 'image' && `${entry.image}%`}
+                    {sortField === 'xp' && entry.xp.toLocaleString()}
+                    {sortField === 'earnings' && entry.earnings.toLocaleString()}
                     {sortField === 'challenges' && entry.challenges}
                     {sortField === 'streak' && (
                       <span className="flex items-center justify-end">

@@ -5,9 +5,11 @@ export interface LeaderboardEntry {
   organization: string;
   department: string;
   rank: string;
+  /** % progress within current XP tier */
   progress: number;
+  /** Reputation points (not currency) */
   earnings: number;
-  image: number;
+  xp: number;
   challenges: number;
   streak: number;
   position: number;
@@ -23,7 +25,7 @@ export const teamLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 35,
     earnings: 350,
-    image: 60,
+    xp: 3500,
     challenges: 8,
     streak: 3,
     position: 1
@@ -36,7 +38,7 @@ export const teamLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 28,
     earnings: 285,
-    image: 55,
+    xp: 2800,
     challenges: 6,
     streak: 5,
     position: 2
@@ -49,7 +51,7 @@ export const teamLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 22,
     earnings: 220,
-    image: 45,
+    xp: 2200,
     challenges: 5,
     streak: 2,
     position: 3
@@ -62,7 +64,7 @@ export const teamLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 18,
     earnings: 175,
-    image: 40,
+    xp: 1800,
     challenges: 4,
     streak: 1,
     position: 4
@@ -75,7 +77,7 @@ export const teamLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 15,
     earnings: 150,
-    image: 35,
+    xp: 1500,
     challenges: 3,
     streak: 0,
     position: 5
@@ -92,7 +94,7 @@ export const companyLeaderboard: LeaderboardEntry[] = [
     rank: 'medior',
     progress: 65,
     earnings: 750,
-    image: 85,
+    xp: 12000,
     challenges: 25,
     streak: 12,
     position: 1
@@ -105,7 +107,7 @@ export const companyLeaderboard: LeaderboardEntry[] = [
     rank: 'medior',
     progress: 58,
     earnings: 680,
-    image: 78,
+    xp: 10500,
     challenges: 22,
     streak: 8,
     position: 2
@@ -118,7 +120,7 @@ export const companyLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 35,
     earnings: 350,
-    image: 60,
+    xp: 3500,
     challenges: 8,
     streak: 3,
     position: 12
@@ -135,7 +137,7 @@ export const worldwideLeaderboard: LeaderboardEntry[] = [
     rank: 'legend',
     progress: 98,
     earnings: 2500,
-    image: 99,
+    xp: 52000,
     challenges: 150,
     streak: 90,
     position: 1
@@ -148,7 +150,7 @@ export const worldwideLeaderboard: LeaderboardEntry[] = [
     rank: 'master',
     progress: 92,
     earnings: 2250,
-    image: 95,
+    xp: 48000,
     challenges: 130,
     streak: 75,
     position: 2
@@ -161,7 +163,7 @@ export const worldwideLeaderboard: LeaderboardEntry[] = [
     rank: 'master',
     progress: 88,
     earnings: 2100,
-    image: 92,
+    xp: 45000,
     challenges: 125,
     streak: 60,
     position: 3
@@ -174,7 +176,7 @@ export const worldwideLeaderboard: LeaderboardEntry[] = [
     rank: 'beginner',
     progress: 35,
     earnings: 350,
-    image: 60,
+    xp: 3500,
     challenges: 8,
     streak: 3,
     position: 245

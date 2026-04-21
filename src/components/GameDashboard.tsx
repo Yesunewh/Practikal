@@ -1,28 +1,33 @@
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useChallenges } from '../context/ChallengeContext';
-import { useProgress } from '../context/ProgressContext';
-import { useCampaigns, assignmentsForUser } from '../context/CampaignContext';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 import { learningPaths, pathCompletedCount } from '../data/learningPaths';
-import { getPassedChallengeIdsForUser, getWeakestCategory } from '../utils/progressCalculations';
-import { Heart, Lock, CheckCircle2, Calendar, Target, Route, Sparkles, Bell } from 'lucide-react';
+import { getWeakestCategory } from '../utils/progressCalculations';
+import { Heart, Lock, CheckCircle2, Calendar, Target, Route, Sparkles } from 'lucide-react';
 import { getStrings } from '../i18n/strings';
+import {
+  selectUserProgress,
+  selectPassedChallengeIds,
+  selectChallengeSummariesForUser,
+} from '../store/slices/progressSlice';
+import { mergeApiOrLocalProgression } from '../utils/challengeProgression';
+import { assignmentsForUser } from '../store/slices/campaignsSlice';
 
 interface GameDashboardProps {
   onNavigate: (page: string) => void;
 }
 
 function GameDashboard({ onNavigate }: GameDashboardProps) {
-  const { user } = useAuth();
-  const { challenges } = useChallenges();
-  const { calculateProgress } = useProgress();
-  const { assignments } = useCampaigns();
+  const user = useSelector((state: RootState) => state.auth.user);
+  const challenges = useSelector((state: any) => state.challenges.challenges);
+  const assignments = useSelector((state: any) => state.campaigns.assignments);
+  const uid = user?.id || '';
+  const progress = useSelector(selectUserProgress(uid, challenges));
+  const completedIds = useSelector(selectPassedChallengeIds(uid));
+  const challengeSummaries = useSelector(selectChallengeSummariesForUser(uid));
 
   if (!user) return null;
 
   const t = getStrings().dashboard;
-  const progress = calculateProgress(user.id, challenges);
-  const completedIds = getPassedChallengeIdsForUser(user.id);
   const mine = assignmentsForUser(assignments, user.id);
   const weakest = getWeakestCategory(progress);
 
@@ -30,38 +35,8 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
   const spotlight =
     challenges.length > 0 ? challenges[weekSlot % challenges.length] : null;
 
-  const dueSoon = mine.filter((a) => {
-    const due = new Date(a.dueDate);
-    const days = Math.ceil((due.getTime() - Date.now()) / 86400000);
-    return days > 0 && days <= 2;
-  });
-
   return (
     <div className="min-h-screen bg-gray-50 p-8">
-      {dueSoon.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center gap-3">
-          <Bell className="text-amber-700 shrink-0" size={22} />
-          <div className="flex-1 min-w-[200px]">
-            <div className="font-medium text-amber-900">{t.dueSoonTitle}</div>
-            <div className="text-sm text-amber-800">{t.dueSoonBody}</div>
-            <ul className="mt-2 text-sm text-amber-900 list-disc list-inside">
-              {dueSoon.map((a) => (
-                <li key={a.id}>
-                  {a.title} — {t.due} {a.dueDate}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('challenges')}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700"
-          >
-            {t.start}
-          </button>
-        </div>
-      )}
-
       {spotlight && (
         <div className="mb-8 rounded-xl border border-emerald-200 bg-emerald-50/80 p-5 flex flex-wrap items-center gap-4">
           <Sparkles className="text-emerald-600 shrink-0" size={26} />
@@ -200,7 +175,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
                     const doneHere = completedIds.has(cid);
                     const prevId = idx > 0 ? path.stepChallengeIds[idx - 1] : null;
                     const locked = idx > 0 && prevId !== null && !completedIds.has(prevId);
-                    const title = challenges.find((c) => c.id === cid)?.title ?? `Challenge ${cid}`;
+                    const title = challenges.find((c: any) => c.id === cid)?.title ?? `Challenge ${cid}`;
                     return (
                       <div
                         key={cid}
@@ -230,25 +205,68 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
 
       <h2 className="text-2xl font-semibold text-gray-900 mb-6">{t.challengesTitle}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {challenges.map((challenge) => (
-          <div
-            key={challenge.id}
-            className="bg-white rounded-xl p-6 shadow-sm cursor-pointer hover:shadow-md transition-shadow tap-highlight"
-            onClick={() => onNavigate('challenges')}
-          >
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-medium">{challenge.title}</h3>
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
-                {challenge.difficulty}
-              </span>
+        {challenges.map((challenge: any) => {
+          const done = completedIds.has(challenge.id);
+          const { progressionLocked, progressionLockReason } = mergeApiOrLocalProgression(
+            challenge,
+            challenges,
+            completedIds,
+          );
+          const summary = challengeSummaries[challenge.id];
+          const barPct = done ? 100 : summary?.bestScore ?? 0;
+          return (
+            <div
+              key={challenge.id}
+              title={progressionLocked ? progressionLockReason || undefined : undefined}
+              className={`bg-white rounded-xl p-6 shadow-sm transition-shadow tap-highlight border ${
+                progressionLocked
+                  ? 'opacity-80 cursor-pointer hover:shadow-md'
+                  : 'cursor-pointer hover:shadow-md'
+              } ${done ? 'border-emerald-200 ring-1 ring-emerald-50' : 'border-transparent'}`}
+              onClick={() => onNavigate('challenges')}
+            >
+              <div className="flex justify-between items-start gap-3 mb-4">
+                <h3 className="text-lg font-medium">{challenge.title}</h3>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {progressionLocked && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-50 px-2 py-1 rounded-full">
+                      <Lock size={12} />
+                      Locked
+                    </span>
+                  )}
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
+                    {challenge.difficulty}
+                  </span>
+                  {done && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                      <CheckCircle2 size={14} />
+                      {t.completedLabel}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <p className="text-gray-600 mb-3">{challenge.description}</p>
+              <div className="mb-4">
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>{t.progressLabel}</span>
+                  <span>{barPct}%</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      progressionLocked ? 'bg-gray-300' : done ? 'bg-emerald-500' : 'bg-amber-400'
+                    }`}
+                    style={{ width: `${progressionLocked ? 0 : barPct}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span>🕒 {challenge.duration} min</span>
+                <span>⭐ {challenge.xpReward} XP</span>
+              </div>
             </div>
-            <p className="text-gray-600 mb-4">{challenge.description}</p>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>🕒 {challenge.duration} min</span>
-              <span>⭐ {challenge.xpReward} XP</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

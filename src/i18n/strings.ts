@@ -15,10 +15,10 @@ const en = {
     start: 'Start',
     pathsTitle: 'Learning paths',
     challengesTitle: 'Available challenges',
+    completedLabel: 'Complete',
+    progressLabel: 'Progress',
     weeklyPick: 'This week’s micro-challenge',
     weeklyPickHelp: 'Short focus rotation — complete for extra consistency.',
-    dueSoonTitle: 'Due soon',
-    dueSoonBody: 'Complete these assignments before the deadline.',
   },
 } as const;
 

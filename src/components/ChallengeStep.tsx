@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   ChallengeStep as ChallengeStepType,
   QuestionContent,
@@ -14,8 +15,8 @@ import {
   PolicyAttestationContent,
   StepCompleteDetail,
 } from '../types';
-import { useAuth } from '../context/AuthContext';
-import { useProgress } from '../context/ProgressContext';
+import { RootState, AppDispatch } from '../store';
+import { logActivity } from '../store/slices/progressSlice';
 import { CheckCircle2, XCircle, Eye, EyeOff, MoveUp, MoveDown, Terminal, Mail, Shield, AlertTriangle, FileText } from 'lucide-react';
 
 function videoEmbedUrl(url: string): string {
@@ -41,8 +42,8 @@ interface ChallengeStepProps {
 }
 
 export default function ChallengeStep({ step, onComplete, isLast }: ChallengeStepProps) {
-  const { user } = useAuth();
-  const { logActivity } = useProgress();
+  const dispatch = useDispatch<AppDispatch>();
+  const user = useSelector((state: RootState) => state.auth.user);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -94,11 +95,18 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
     
     if (step.type === 'question' || step.type === 'scenario' || step.type === 'video-check') {
       const content = step.content as QuestionContent | ScenarioContent | VideoCheckContent;
-      if ('multipleAnswers' in content && content.multipleAnswers) {
-        setSelectedOptions(prev => 
-          prev.includes(optionId) 
-            ? prev.filter(id => id !== optionId)
-            : [...prev, optionId]
+      const qKind =
+        step.type === 'question' ? (content as QuestionContent).questionKind ?? 'multiple_choice' : null;
+      const forceSingleSelect =
+        step.type === 'scenario' ||
+        step.type === 'video-check' ||
+        qKind === 'true_false' ||
+        qKind === 'binary_verdict' ||
+        (step.type === 'question' && !(content as QuestionContent).multipleAnswers);
+
+      if ('multipleAnswers' in content && content.multipleAnswers && !forceSingleSelect) {
+        setSelectedOptions((prev) =>
+          prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId],
         );
       } else {
         setSelectedOptions([optionId]);
@@ -244,11 +252,11 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
     resultRef.current = detail;
     if (step.type === 'policy-attestation' && isCorrect && user) {
       const c = step.content as PolicyAttestationContent;
-      logActivity({
+      dispatch(logActivity({
         userId: user.id,
         type: 'policy_attested',
         details: { policyId: c.policyId, policyTitle: c.documentTitle },
-      });
+      }));
     }
     setIsAnswered(true);
     setShowExplanation(true);

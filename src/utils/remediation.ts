@@ -30,11 +30,20 @@ export function getRemediationItems(
           challengeTitle: ch.title,
           stepId: ans.stepId,
           category: ch.category,
-          completedAt: att.completedAt!,
+          completedAt: new Date(att.completedAt!),
         });
       }
     }
   }
 
-  return items.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
+  const sorted = items.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
+  const seen = new Set<string>();
+  const deduped: RemediationItem[] = [];
+  for (const item of sorted) {
+    const key = `${item.challengeId}:${item.stepId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
 }

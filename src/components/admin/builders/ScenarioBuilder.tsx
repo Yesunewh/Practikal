@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { Upload, X, Plus } from 'lucide-react';
+import type { ScenarioContent } from '../../../types';
+import { validateScenarioContent } from '../../../utils/validateQuestionStepContent';
+import toast from 'react-hot-toast';
 
 interface ScenarioBuilderProps {
   onSave: (stepData: any) => void;
@@ -10,33 +13,43 @@ export default function ScenarioBuilder({ onSave, onCancel }: ScenarioBuilderPro
   const [situation, setSituation] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
-  const [leftChoice, setLeftChoice] = useState({ text: '', consequence: '', isCorrect: false });
+  const [leftChoice, setLeftChoice] = useState({ text: '', consequence: '', isCorrect: true });
   const [rightChoice, setRightChoice] = useState({ text: '', consequence: '', isCorrect: false });
   const [explanation, setExplanation] = useState('');
 
-  const handleSave = () => {
-    if (!situation || !leftChoice.text || !rightChoice.text) {
-      alert('Please fill in the situation and both choices');
-      return;
+  const setCorrectSide = (side: 'left' | 'right') => {
+    if (side === 'left') {
+      setLeftChoice((c) => ({ ...c, isCorrect: true }));
+      setRightChoice((c) => ({ ...c, isCorrect: false }));
+    } else {
+      setLeftChoice((c) => ({ ...c, isCorrect: false }));
+      setRightChoice((c) => ({ ...c, isCorrect: true }));
     }
+  };
 
-    if (!leftChoice.isCorrect && !rightChoice.isCorrect) {
-      alert('Please mark at least one choice as correct');
+  const handleSave = () => {
+    const content: ScenarioContent = {
+      situation: situation.trim(),
+      options: [
+        { id: '1', text: leftChoice.text.trim(), isCorrect: leftChoice.isCorrect, consequence: leftChoice.consequence },
+        { id: '2', text: rightChoice.text.trim(), isCorrect: rightChoice.isCorrect, consequence: rightChoice.consequence },
+      ],
+    };
+
+    const err = validateScenarioContent(content);
+    if (err) {
+      toast.error(err);
       return;
     }
 
     const stepData = {
       type: 'scenario',
       content: {
-        situation,
+        ...content,
         mediaUrl: mediaUrl || undefined,
         mediaType: mediaUrl ? mediaType : undefined,
-        options: [
-          { id: '1', text: leftChoice.text, isCorrect: leftChoice.isCorrect, consequence: leftChoice.consequence },
-          { id: '2', text: rightChoice.text, isCorrect: rightChoice.isCorrect, consequence: rightChoice.consequence }
-        ]
       },
-      explanation
+      explanation,
     };
 
     onSave(stepData);
@@ -111,11 +124,13 @@ export default function ScenarioBuilder({ onSave, onCancel }: ScenarioBuilderPro
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-blue-600">LEFT CHOICE</span>
               <input
-                type="checkbox"
+                type="radio"
+                name="scenario-correct"
                 checked={leftChoice.isCorrect}
-                onChange={(e) => setLeftChoice({ ...leftChoice, isCorrect: e.target.checked })}
+                onChange={() => setCorrectSide('left')}
                 className="h-4 w-4 text-emerald-600"
-                title="Mark as correct"
+                title="Correct answer"
+                aria-label="Left choice is correct"
               />
             </div>
             <input
@@ -159,11 +174,13 @@ export default function ScenarioBuilder({ onSave, onCancel }: ScenarioBuilderPro
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-purple-600">RIGHT CHOICE</span>
               <input
-                type="checkbox"
+                type="radio"
+                name="scenario-correct"
                 checked={rightChoice.isCorrect}
-                onChange={(e) => setRightChoice({ ...rightChoice, isCorrect: e.target.checked })}
+                onChange={() => setCorrectSide('right')}
                 className="h-4 w-4 text-emerald-600"
-                title="Mark as correct"
+                title="Correct answer"
+                aria-label="Right choice is correct"
               />
             </div>
             <input

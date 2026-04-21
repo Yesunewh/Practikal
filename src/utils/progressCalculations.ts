@@ -1,3 +1,4 @@
+import { challengeAttemptCountsAsPassed } from '../constants/challenges';
 import type { Challenge, ChallengeAttempt, CategoryProgress, UserProgress, WeeklyActivity } from '../types';
 
 const CATEGORIES: CategoryProgress['category'][] = [
@@ -13,13 +14,17 @@ function parseDate(d: Date | string): Date {
   return d instanceof Date ? d : new Date(d);
 }
 
+function toIso(d: Date | string): string {
+  return d instanceof Date ? d.toISOString() : d;
+}
+
 export function reviveAttempts(raw: unknown[]): ChallengeAttempt[] {
   return raw.map((a) => {
     const x = a as ChallengeAttempt;
     return {
       ...x,
-      startedAt: parseDate(x.startedAt),
-      completedAt: x.completedAt ? parseDate(x.completedAt) : undefined,
+      startedAt: toIso(x.startedAt as Date | string),
+      completedAt: x.completedAt != null ? toIso(x.completedAt as Date | string) : undefined,
     };
   });
 }
@@ -103,7 +108,7 @@ export function buildWeeklyActivity(attempts: ChallengeAttempt[], weeks = 8): We
     w.setDate(w.getDate() - i * 7);
     const key = isoWeekKey(w);
     const inWeek = attempts.filter((a) => a.completedAt && isoWeekKey(parseDate(a.completedAt)) === key);
-    const passed = inWeek.filter((a) => a.passed);
+    const passed = inWeek.filter((a) => challengeAttemptCountsAsPassed(a));
     const xp = passed.reduce((s, a) => s + Math.round(a.score * 10), 0);
     const time = Math.floor(inWeek.reduce((s, a) => s + a.timeSpent, 0) / 60);
     result.push({
@@ -123,7 +128,7 @@ export function buildUserProgress(
 ): UserProgress {
   const attempts = reviveAttempts(rawAttempts).filter((a) => a.userId === userId);
   const completed = attempts.filter((a) => a.completedAt);
-  const passedAttempts = completed.filter((a) => a.passed);
+  const passedAttempts = completed.filter((a) => challengeAttemptCountsAsPassed(a));
 
   const challengeById = new Map(challenges.map((c) => [c.id, c]));
   const uniquePassedIds = new Set(passedAttempts.map((a) => a.challengeId));
@@ -187,7 +192,7 @@ export function getWeakestCategory(progress: UserProgress): CategoryProgress | n
 export function getPassedChallengeIdsForUser(userId: string): Set<string> {
   const raw = JSON.parse(localStorage.getItem('challengeAttempts') || '[]');
   const attempts = reviveAttempts(raw).filter(
-    (a) => a.userId === userId && a.passed && a.completedAt,
+    (a) => a.userId === userId && challengeAttemptCountsAsPassed(a),
   );
   return new Set(attempts.map((a) => a.challengeId));
 }

@@ -1,5 +1,32 @@
 export type UserRole = 'user' | 'admin' | 'superadmin';
 
+/** Shape returned by `/api/gamification/*` for server-side gamification fields */
+export interface GamificationApiUser {
+  gamification_xp: number;
+  gamification_level: string;
+  gamification_xp_to_next: number;
+  gamification_reputation: number;
+  gamification_streak: number;
+  gamification_longest_streak?: number;
+  gamification_last_activity?: string | null;
+}
+
+/** Row from GET /api/gamification/leaderboard */
+export interface GamificationLeaderboardRow {
+  rank: number;
+  userId: string;
+  name: string;
+  xp: number;
+  level: string;
+  reputation: number;
+  orgId: string | null;
+  organizationName?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  streak: number;
+  challengesCompleted: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -19,6 +46,11 @@ export interface User {
     nextRankPoints: number;
   };
   role: UserRole;
+  orgId?: string;
+  deptId?: string;
+  /** Assigned organizational unit for UNIT_ADMIN (branch scope). */
+  unitId?: string;
+  user_type?: string;
   permissions?: string[];
   progress?: UserProgress;
   activityLog?: ActivityLogEntry[];
@@ -38,6 +70,15 @@ export interface Challenge {
   category: 'phishing' | 'malware' | 'password' | 'general' | 'social-engineering' | 'incident-response';
   steps: ChallengeStep[];
   completed?: boolean;
+  orgId?: string | null;
+  deptId?: string | null;
+  /** Present for admin / exam-bank API responses */
+  isActive?: boolean;
+  attemptCount?: number;
+  updatedAt?: string | null;
+  /** From gamification API: tier gating within category (beginner → intermediate → advanced). */
+  progressionLocked?: boolean;
+  progressionLockReason?: string | null;
 }
 
 export interface ChallengeStep {
@@ -216,6 +257,10 @@ export interface Achievement {
   title: string;
   description: string;
   icon: string;
+  /** From gamification API: user earned this achievement */
+  completed?: boolean;
+  /** ISO timestamp from API when completed */
+  completedAt?: string | null;
   unlockedAt?: Date;
   progress?: number;
   total?: number;
@@ -302,7 +347,8 @@ export interface ActivityLogEntry {
     | 'streak_milestone'
     | 'login'
     | 'policy_attested';
-  timestamp: Date;
+  /** ISO 8601 — kept serializable for Redux / persistence */
+  timestamp: string;
   details: {
     challengeId?: string;
     challengeTitle?: string;
@@ -322,8 +368,9 @@ export interface ChallengeAttempt {
   id: string;
   userId: string;
   challengeId: string;
-  startedAt: Date;
-  completedAt?: Date;
+  /** ISO 8601 — kept serializable for Redux / persistence */
+  startedAt: string;
+  completedAt?: string;
   timeSpent: number; // in seconds
   score: number;
   passed: boolean;

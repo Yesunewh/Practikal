@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Plus, Trash2, Check } from 'lucide-react';
 import type { QuestionContent, QuestionKind, QuestionVerdictContext } from '../../../types';
 import { QUESTION_KIND_OPTIONS } from '../../../constants/questionKinds';
+import { validateQuestionContent } from '../../../utils/validateQuestionStepContent';
+import toast from 'react-hot-toast';
 
 interface QuizBuilderProps {
   onSave: (stepData: {
@@ -20,12 +22,12 @@ interface QuizBuilderProps {
 }
 
 const TF_OPTIONS = () => [
-  { id: 'tf-1', text: 'True', isCorrect: false },
+  { id: 'tf-1', text: 'True', isCorrect: true },
   { id: 'tf-2', text: 'False', isCorrect: false },
 ];
 
 const VERDICT_OPTIONS = () => [
-  { id: 'bv-1', text: 'Looks like phishing', isCorrect: false },
+  { id: 'bv-1', text: 'Looks like phishing', isCorrect: true },
   { id: 'bv-2', text: 'Looks real', isCorrect: false },
 ];
 
@@ -66,38 +68,35 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
     setOptions(options.filter((opt) => opt.id !== id));
   };
 
-  const updateOption = (id: string, field: string, value: string | boolean) => {
+  const updateOptionText = (id: string, text: string) => {
+    setOptions(options.map((opt) => (opt.id === id ? { ...opt, text } : opt)));
+  };
+
+  /** Single-correct modes: only one option may be correct. */
+  const setExclusiveCorrect = (id: string) => {
+    setOptions(options.map((opt) => ({ ...opt, isCorrect: opt.id === id })));
+  };
+
+  const toggleCorrectMulti = (id: string, checked: boolean) => {
     setOptions(
-      options.map((opt) => (opt.id === id ? { ...opt, [field]: value } : opt)),
+      options.map((opt) => (opt.id === id ? { ...opt, isCorrect: checked } : opt)),
     );
   };
 
+  const handleCorrectControl = (id: string, checked: boolean) => {
+    if (questionKind === 'true_false' || questionKind === 'binary_verdict') {
+      if (checked) setExclusiveCorrect(id);
+      return;
+    }
+    if (questionKind === 'multiple_choice' && !multipleAnswers) {
+      if (checked) setExclusiveCorrect(id);
+      else toggleCorrectMulti(id, false);
+      return;
+    }
+    toggleCorrectMulti(id, checked);
+  };
+
   const handleSave = () => {
-    if (!question.trim()) {
-      alert('Please enter a prompt or question title');
-      return;
-    }
-
-    if (options.some((opt) => !opt.text.trim())) {
-      alert('Please fill in all answer labels');
-      return;
-    }
-
-    if (!options.some((opt) => opt.isCorrect)) {
-      alert('Please mark at least one option as correct');
-      return;
-    }
-
-    if (questionKind === 'binary_verdict' && !scenarioBody.trim()) {
-      alert('Please enter the mock message body learners will judge (e.g. email content).');
-      return;
-    }
-
-    if ((questionKind === 'true_false' || questionKind === 'binary_verdict') && options.length !== 2) {
-      alert('True/false and binary verdict types need exactly two choices.');
-      return;
-    }
-
     const content: QuestionContent = {
       question: question.trim(),
       options,
@@ -114,6 +113,12 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
           }
         : {}),
     };
+
+    const err = validateQuestionContent(content);
+    if (err) {
+      toast.error(err);
+      return;
+    }
 
     onSave({ type: 'question', content, explanation });
   };
@@ -223,7 +228,17 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
             type="checkbox"
             id="multipleAnswers"
             checked={multipleAnswers}
-            onChange={(e) => setMultipleAnswers(e.target.checked)}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setMultipleAnswers(on);
+              if (!on) {
+                const firstCorrect = options.find((o) => o.isCorrect);
+                const keepId = firstCorrect?.id ?? options[0]?.id;
+                if (keepId) {
+                  setOptions((prev) => prev.map((o) => ({ ...o, isCorrect: o.id === keepId })));
+                }
+              }
+            }}
             className="h-5 w-5 text-emerald-600"
           />
           <label htmlFor="multipleAnswers" className="text-sm font-medium text-gray-700">
@@ -263,13 +278,26 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
               <div className="flex items-center gap-3 flex-1">
                 <div className="flex flex-col items-center gap-1">
                   <span className="text-xs font-medium text-gray-500">#{index + 1}</span>
-                  <input
-                    type="checkbox"
-                    checked={option.isCorrect}
-                    onChange={(e) => updateOption(option.id, 'isCorrect', e.target.checked)}
-                    className="h-5 w-5 text-emerald-600"
-                    title="Correct answer"
-                  />
+                  {questionKind === 'multiple_choice' && multipleAnswers ? (
+                    <input
+                      type="checkbox"
+                      checked={option.isCorrect}
+                      onChange={(e) => handleCorrectControl(option.id, e.target.checked)}
+                      className="h-5 w-5 text-emerald-600"
+                      title="Correct answer"
+                      aria-label={`Mark option ${index + 1} as correct`}
+                    />
+                  ) : (
+                    <input
+                      type="radio"
+                      name="quiz-builder-correct"
+                      checked={option.isCorrect}
+                      onChange={() => handleCorrectControl(option.id, true)}
+                      className="h-4 w-4 text-emerald-600"
+                      title="Correct answer"
+                      aria-label={`Correct answer: option ${index + 1}`}
+                    />
+                  )}
                   <span className="text-xs text-gray-500">Correct</span>
                 </div>
                 <input
@@ -287,7 +315,7 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
                         : `Option ${index + 1}`
                   }
                   value={option.text}
-                  onChange={(e) => updateOption(option.id, 'text', e.target.value)}
+                  onChange={(e) => updateOptionText(option.id, e.target.value)}
                 />
               </div>
               {questionKind === 'multiple_choice' && options.length > 2 && (

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { User } from '../../types';
-import { LayoutDashboard, Users, BookOpen, BarChart2, Settings, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, BarChart2, Settings, Shield, Building2 } from 'lucide-react';
+
 
 interface AdminNavigationProps {
   currentUser: User;
@@ -41,7 +42,7 @@ export default function AdminNavigation({ currentUser }: AdminNavigationProps) {
           className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-emerald-50 text-gray-700 hover:text-emerald-700"
         >
           <BookOpen size={18} className="mr-3" />
-          Challenge Management
+          Challenges &amp; exam bank
         </Link>
         
         <Link 
@@ -49,9 +50,19 @@ export default function AdminNavigation({ currentUser }: AdminNavigationProps) {
           className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-emerald-50 text-gray-700 hover:text-emerald-700"
         >
           <BarChart2 size={18} className="mr-3" />
-          Reports
+          Training reports
         </Link>
         
+        {isSuperAdmin && (
+          <Link 
+            to="/admin/organizations" 
+            className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-emerald-50 text-gray-700 hover:text-emerald-700"
+          >
+            <Building2 size={18} className="mr-3" />
+            Organizations
+          </Link>
+        )}
+
         {isSuperAdmin && (
           <Link 
             to="/admin/settings" 
@@ -61,6 +72,7 @@ export default function AdminNavigation({ currentUser }: AdminNavigationProps) {
             System Settings
           </Link>
         )}
+
         
         {isSuperAdmin && (
           <Link 
