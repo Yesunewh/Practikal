@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Challenge } from '../types';
-import { ArrowLeft, Trophy } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import ChallengeStep from './ChallengeStep';
+import ChallengeCompletionScreen from './ChallengeCompletionScreen';
 import { RootState, AppDispatch, store } from '../store';
 import { startChallenge, completeChallenge, updateStepProgress } from '../store/slices/progressSlice';
 import { mergeGamificationFromApi, recordChallengePassed } from '../store/slices/authSlice';
@@ -102,40 +103,20 @@ export default function ActiveChallenge({ challenge, onComplete, onExit }: Activ
     const { score, passed } = outcomeRef.current;
 
     return (
-      <div className="min-h-screen bg-gray-50 p-8 motion-safe:animate-fade-in">
-        <div className="max-w-3xl mx-auto">
-          <div className="bg-white rounded-xl p-8 shadow-sm text-center motion-safe:animate-fade-in-up">
-            <div className="mb-6">
-              <Trophy
-                className={`mx-auto h-16 w-16 motion-safe:animate-trophy-pop ${passed ? 'text-yellow-400' : 'text-gray-400'}`}
-              />
-            </div>
-            <h2 className="text-2xl font-bold mb-4">
-              {passed ? 'Challenge Completed!' : 'Challenge Incomplete'}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {passed
-                ? `Congratulations! You've completed the ${challenge.title} challenge with a score of ${score}%`
-                : `You scored ${score}%. You need ${CHALLENGE_PASS_SCORE_PERCENT}% to pass this challenge. Try again!`}
-            </p>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={onExit}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 tap-highlight transition-colors"
-              >
-                Back to Challenges
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ChallengeCompletionScreen
+        passed={passed}
+        score={score}
+        challengeTitle={challenge.title}
+        passThreshold={CHALLENGE_PASS_SCORE_PERCENT}
+        onExit={onExit}
+      />
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-neutral-50">
       <div className="bg-emerald-900 text-white py-6">
-        <div className="max-w-3xl mx-auto px-4">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 2xl:max-w-7xl">
           <div className="flex items-center gap-4 mb-4">
             <button onClick={onExit} className="hover:text-emerald-200">
               <ArrowLeft size={24} />
@@ -155,8 +136,8 @@ export default function ActiveChallenge({ challenge, onComplete, onExit }: Activ
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-xl p-8 shadow-sm motion-safe:animate-fade-in">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 2xl:max-w-7xl">
+        <div className="rounded-xl bg-white p-4 shadow-sm motion-safe:animate-fade-in sm:p-6 xl:p-8">
           {submitError && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
               {submitError}

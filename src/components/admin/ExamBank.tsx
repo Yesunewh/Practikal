@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { User, Challenge, ChallengeStep } from '../../types';
@@ -94,6 +94,9 @@ export default function ExamBank({
       currentUser.role === 'admin' &&
       (currentUser.user_type == null || currentUser.user_type === ''));
   const reduxChallenges = useSelector((s: RootState) => s.challenges.challenges);
+  const scopeOrgInputId = useId();
+  const scopeDeptInputId = useId();
+  const catalogSearchId = useId();
 
   const [scopeOrgId, setScopeOrgId] = useState(currentUser.orgId || '');
   const [scopeDeptId, setScopeDeptId] = useState(
@@ -155,14 +158,14 @@ export default function ExamBank({
   });
 
   const handleDeleteExam = async (examId: string) => {
-    if (!confirm('Archive this exam (challenge)? Learners will no longer see it.')) return;
+    if (!confirm('Archive this challenge? Learners will no longer see it.')) return;
     try {
       if (useGamificationApi && canManageApi) {
         await deleteChallengeApi(examId).unwrap();
         await refetch();
       }
     } catch {
-      alert('Could not archive exam. Check permissions and try again.');
+      alert('Could not archive challenge. Check permissions and try again.');
     }
   };
 
@@ -175,7 +178,7 @@ export default function ExamBank({
       case 'advanced':
         return 'text-red-700 bg-red-100';
       default:
-        return 'text-gray-700 bg-gray-100';
+        return 'text-neutral-700 bg-neutral-100';
     }
   };
 
@@ -186,7 +189,7 @@ export default function ExamBank({
       case 'archived':
         return 'text-red-700 bg-red-100';
       default:
-        return 'text-gray-700 bg-gray-100';
+        return 'text-neutral-700 bg-neutral-100';
     }
   };
 
@@ -194,10 +197,7 @@ export default function ExamBank({
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <div>
-          <h2 className="text-lg font-semibold text-gray-800">Exam Bank</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Learning challenges in the database (same catalog as Challenge Management), with completion attempts.
-          </p>
+          <h2 className="text-lg font-semibold text-neutral-800">Learning challenge catalog</h2>
         </div>
         {canAuthorChallenges && (
           <button
@@ -215,25 +215,39 @@ export default function ExamBank({
         <div className="px-6 py-4 border-b bg-amber-50/80 text-sm space-y-2">
           <p className="font-medium text-amber-900">Filter scope (SUPERADMIN)</p>
           <div className="flex flex-col md:flex-row gap-2 md:gap-4">
-            <input
-              className="flex-1 border rounded px-3 py-2"
-              placeholder="Organization UUID (empty = all visible)"
-              value={scopeOrgId}
-              onChange={(e) => setScopeOrgId(e.target.value)}
-            />
-            <input
-              className="flex-1 border rounded px-3 py-2"
-              placeholder="Department UUID (optional)"
-              value={scopeDeptId}
-              onChange={(e) => setScopeDeptId(e.target.value)}
-            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label htmlFor={scopeOrgInputId} className="text-xs font-medium text-amber-900">
+                Organization UUID
+              </label>
+              <span id={`${scopeOrgInputId}-hint`} className="sr-only">
+                Leave empty to include all organizations you can see.
+              </span>
+              <input
+                id={scopeOrgInputId}
+                className="w-full rounded border border-neutral-200 px-3 py-2"
+                aria-describedby={`${scopeOrgInputId}-hint`}
+                value={scopeOrgId}
+                onChange={(e) => setScopeOrgId(e.target.value)}
+              />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label htmlFor={scopeDeptInputId} className="text-xs font-medium text-amber-900">
+                Department UUID <span className="font-normal text-amber-800/80">(optional)</span>
+              </label>
+              <input
+                id={scopeDeptInputId}
+                className="w-full rounded border border-neutral-200 px-3 py-2"
+                value={scopeDeptId}
+                onChange={(e) => setScopeDeptId(e.target.value)}
+              />
+            </div>
           </div>
         </div>
       )}
 
       {useGamificationApi && !canManageApi && (
         <div className="px-6 py-3 border-b text-sm text-amber-800 bg-amber-50">
-          You need admin access to load the exam bank from the server.
+          You need admin access to load the challenge catalog from the server.
         </div>
       )}
 
@@ -244,29 +258,32 @@ export default function ExamBank({
       )}
 
       {isError && useGamificationApi && canManageApi && (
-        <div className="px-6 py-3 border-b text-sm text-red-600">Could not load exams from the server.</div>
+        <div className="px-6 py-3 border-b text-sm text-red-600">Could not load challenges from the server.</div>
       )}
 
       {isFetching && useGamificationApi && canManageApi && (
-        <div className="px-6 py-3 border-b text-sm text-gray-500">Loading exams…</div>
+        <div className="px-6 py-3 border-b text-sm text-neutral-500">Loading challenges…</div>
       )}
 
       <div className="p-6 border-b">
         <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
           <div className="relative w-full md:w-64">
+            <label htmlFor={catalogSearchId} className="sr-only">
+              Search challenges
+            </label>
             <input
+              id={catalogSearchId}
               type="text"
-              placeholder="Search exams..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Search size={18} className="absolute left-3 top-2.5 text-gray-400" />
+            <Search size={18} className="absolute left-3 top-2.5 text-neutral-400 pointer-events-none" aria-hidden />
           </div>
 
           <div className="relative w-full md:w-48">
             <select
-              className="w-full pl-4 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
+              className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
               value={filterDifficulty}
               onChange={(e) => setFilterDifficulty(e.target.value)}
             >
@@ -275,12 +292,12 @@ export default function ExamBank({
               <option value="intermediate">Intermediate</option>
               <option value="advanced">Advanced</option>
             </select>
-            <ChevronDown size={18} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
+            <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
           </div>
 
           <div className="relative w-full md:w-48">
             <select
-              className="w-full pl-4 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
+              className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
@@ -288,51 +305,56 @@ export default function ExamBank({
               <option value="active">Active</option>
               <option value="archived">Archived</option>
             </select>
-            <ChevronDown size={18} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
+            <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
           </div>
         </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-neutral-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exam</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scope</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Difficulty</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attempts</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Challenge</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Scope</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Details</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Difficulty</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider"
+                title="Total completion attempts (all learners), from the database"
+              >
+                Attempts
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-neutral-200">
             {filteredExams.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
-                  No exams match your filters.
-                  {canAuthorChallenges ? ' Create content under Authoring.' : ''}
+                <td colSpan={7} className="px-6 py-8 text-center text-sm text-neutral-500">
+                  No challenges match your filters.
+                  {canAuthorChallenges ? ' Create or edit content under Authoring.' : ''}
                 </td>
               </tr>
             ) : (
               filteredExams.map((exam) => (
-                <tr key={exam.id} className="hover:bg-gray-50">
+                <tr key={exam.id} className="hover:bg-neutral-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
                         <FileText size={20} className="text-emerald-600" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{exam.title}</div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-sm font-medium text-neutral-900">{exam.title}</div>
+                        <div className="text-xs text-neutral-500">
                           {exam.category} · {exam.challengeType}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-xs text-gray-600 whitespace-nowrap">{exam.scopeLabel}</td>
+                  <td className="px-6 py-4 text-xs text-neutral-600 whitespace-nowrap">{exam.scopeLabel}</td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-500">
                       <div className="flex items-center">
                         <Clock size={14} className="mr-1" />
                         {exam.duration} min
@@ -345,7 +367,7 @@ export default function ExamBank({
                         <Award size={14} className="mr-1" />
                         {exam.passingScore}% pass
                       </div>
-                      <div className="text-xs text-gray-400">Updated {exam.updatedLabel}</div>
+                      <div className="text-xs text-neutral-400">Updated {exam.updatedLabel}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -363,7 +385,7 @@ export default function ExamBank({
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{exam.attempts.toLocaleString()}</div>
+                    <div className="text-sm text-neutral-900">{exam.attempts.toLocaleString()}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2">
@@ -383,7 +405,7 @@ export default function ExamBank({
                             type="button"
                             onClick={() => handleDeleteExam(exam.id)}
                             className="text-red-600 hover:text-red-900"
-                            title="Archive exam"
+                            title="Archive challenge"
                             disabled={!useGamificationApi || !canManageApi}
                           >
                             <Trash2 size={16} />
@@ -400,9 +422,9 @@ export default function ExamBank({
       </div>
 
       <div className="px-6 py-4 border-t flex items-center justify-between">
-        <div className="text-sm text-gray-700">
+        <div className="text-sm text-neutral-700">
           Showing <span className="font-medium">{filteredExams.length}</span> of <span className="font-medium">{exams.length}</span>{' '}
-          exams
+          challenges
         </div>
       </div>
     </div>

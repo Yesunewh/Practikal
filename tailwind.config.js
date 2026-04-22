@@ -49,6 +49,15 @@ export default {
           '55%': { opacity: '1', transform: 'scale(1.04)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
+        celebrationCard: {
+          '0%': { opacity: '0', transform: 'scale(0.94) translateY(20px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+        scorePop: {
+          '0%': { opacity: '0', transform: 'scale(0.65)' },
+          '70%': { transform: 'scale(1.06)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
       },
       animation: {
         'fade-in': 'fadeIn 0.45s ease-out forwards',
@@ -57,6 +66,8 @@ export default {
         'feedback-ok': 'feedbackOk 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'feedback-wrong': 'feedbackWrong 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards',
         'trophy-pop': 'trophyPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+        'celebration-card': 'celebrationCard 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+        'score-pop': 'scorePop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s both',
       },
     },
   },

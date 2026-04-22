@@ -36,7 +36,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
     challenges.length > 0 ? challenges[weekSlot % challenges.length] : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-neutral-50 p-8">
       {spotlight && (
         <div className="mb-8 rounded-xl border border-emerald-200 bg-emerald-50/80 p-5 flex flex-wrap items-center gap-4">
           <Sparkles className="text-emerald-600 shrink-0" size={26} />
@@ -61,16 +61,16 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
             <Heart size={24} />
             <span className="text-2xl font-semibold">{user.reputation}%</span>
           </div>
-          <div className="text-gray-600">{t.reputation}</div>
+          <div className="text-neutral-600">{t.reputation}</div>
         </div>
 
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="text-lg font-medium mb-2">{t.streakTitle}</div>
-          <div className="text-gray-600 mb-4">
+          <div className="text-neutral-600 mb-4">
             {t.streakHelp}{' '}
             <span className="font-semibold text-emerald-700">{progress.currentStreak}</span>
             {progress.longestStreak > 0 && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-neutral-500">
                 {' '}
                 ({t.best} {progress.longestStreak})
               </span>
@@ -81,7 +81,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
               <div
                 key={i}
                 className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm
-                  ${i < progress.currentStreak ? 'border-emerald-500 text-emerald-500' : 'border-gray-200 text-gray-300'}`}
+                  ${i < progress.currentStreak ? 'border-emerald-500 text-emerald-500' : 'border-neutral-200 text-neutral-300'}`}
               >
                 🔥
               </div>
@@ -110,12 +110,12 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
       )}
 
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <h2 className="text-xl font-semibold text-neutral-900 mb-3 flex items-center gap-2">
           <Calendar size={22} className="text-emerald-600" />
           {t.assignedTitle}
         </h2>
         {mine.length === 0 ? (
-          <p className="text-gray-500 text-sm">{t.noAssignments}</p>
+          <p className="text-neutral-500 text-sm">{t.noAssignments}</p>
         ) : (
           <div className="space-y-3">
             {mine.map((a) => {
@@ -126,12 +126,12 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
                 <div
                   key={a.id}
                   className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${
-                    overdue ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'
+                    overdue ? 'border-red-200 bg-red-50' : 'border-neutral-200 bg-white'
                   }`}
                 >
                   <div>
-                    <div className="font-medium text-gray-900">{a.title}</div>
-                    <div className="text-sm text-gray-500">
+                    <div className="font-medium text-neutral-900">{a.title}</div>
+                    <div className="text-sm text-neutral-500">
                       {t.due} {a.dueDate}
                       {overdue ? (
                         <span className="text-red-600 font-medium"> · {t.overdue}</span>
@@ -158,7 +158,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
       </div>
 
       <div className="mb-10">
-        <h2 className="text-xl font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <h2 className="text-xl font-semibold text-neutral-900 mb-3 flex items-center gap-2">
           <Route size={22} className="text-emerald-600" />
           {t.pathsTitle}
         </h2>
@@ -167,9 +167,9 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
             const done = pathCompletedCount(path, completedIds);
             const total = path.stepChallengeIds.length;
             return (
-              <div key={path.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-1">{path.title}</h3>
-                <p className="text-sm text-gray-600 mb-4">{path.description}</p>
+              <div key={path.id} className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm">
+                <h3 className="font-semibold text-neutral-900 mb-1">{path.title}</h3>
+                <p className="text-sm text-neutral-600 mb-4">{path.description}</p>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {path.stepChallengeIds.map((cid, idx) => {
                     const doneHere = completedIds.has(cid);
@@ -183,7 +183,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
                           doneHere
                             ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                             : locked
-                              ? 'border-gray-200 bg-gray-50 text-gray-400'
+                              ? 'border-neutral-200 bg-neutral-50 text-neutral-400'
                               : 'border-amber-200 bg-amber-50 text-amber-900'
                         }`}
                         title={title}
@@ -194,7 +194,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
                     );
                   })}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-neutral-600">
                   Progress: {done} / {total} steps
                 </div>
               </div>
@@ -203,7 +203,7 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
         </div>
       </div>
 
-      <h2 className="text-2xl font-semibold text-gray-900 mb-6">{t.challengesTitle}</h2>
+      <h2 className="text-2xl font-semibold text-neutral-900 mb-6">{t.challengesTitle}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {challenges.map((challenge: any) => {
           const done = completedIds.has(challenge.id);
@@ -245,22 +245,22 @@ function GameDashboard({ onNavigate }: GameDashboardProps) {
                   )}
                 </div>
               </div>
-              <p className="text-gray-600 mb-3">{challenge.description}</p>
+              <p className="text-neutral-600 mb-3">{challenge.description}</p>
               <div className="mb-4">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <div className="flex justify-between text-xs text-neutral-500 mb-1">
                   <span>{t.progressLabel}</span>
                   <span>{barPct}%</span>
                 </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
-                      progressionLocked ? 'bg-gray-300' : done ? 'bg-emerald-500' : 'bg-amber-400'
+                      progressionLocked ? 'bg-neutral-300' : done ? 'bg-emerald-500' : 'bg-amber-400'
                     }`}
                     style={{ width: `${progressionLocked ? 0 : barPct}%` }}
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-4 text-sm text-neutral-500">
                 <span>🕒 {challenge.duration} min</span>
                 <span>⭐ {challenge.xpReward} XP</span>
               </div>

@@ -4,9 +4,11 @@ import {
   useCreateUnitTypeMutation,
   useGetOrganizationsQuery,
 } from '../../store/apiSlice/practikalApi';
-import { Layers, Plus, Save } from 'lucide-react';
+import { Plus, Save } from 'lucide-react';
 import { User } from '../../types';
 import toast from 'react-hot-toast';
+import AdminHierarchyPageShell from './AdminHierarchyPageShell';
+import HierarchyLevelsGraphic from './HierarchyLevelsGraphic';
 
 export default function UnitTypeConfigurator({ currentUser }: { currentUser: User }) {
   const isSuperAdmin = currentUser.role === 'superadmin';
@@ -74,54 +76,59 @@ export default function UnitTypeConfigurator({ currentUser }: { currentUser: Use
 
   if (!effectiveOrgId && !isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <Layers className="text-emerald-600" />
-          Structural Terminology
-        </h2>
-        {isSuperAdmin ? (
-          <>
-            <p className="text-sm text-gray-600">Choose which organization’s hierarchy labels to edit.</p>
-            <label className="block text-xs font-medium text-gray-700">Organization</label>
-            <select
-              className="w-full max-w-md rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              value={superOrgId}
-              onChange={(e) => setSuperOrgId(e.target.value)}
-            >
-              <option value="">Select organization…</option>
-              {orgs.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </>
-        ) : (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-            Your account is not linked to an organization. Contact a platform administrator.
-          </p>
-        )}
-      </div>
+      <AdminHierarchyPageShell
+        title="Structural terminology"
+        subtitle="Choose which organization’s hierarchy labels to edit. Labels appear in the branch tree and across admin tools."
+      >
+        <div className="space-y-4 p-6">
+          {isSuperAdmin ? (
+            <>
+              <label className="block text-xs font-medium text-indigo-900/80">Organization</label>
+              <select
+                className="w-full max-w-md rounded-xl border border-indigo-200/90 bg-white px-3 py-2.5 text-sm text-neutral-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
+                value={superOrgId}
+                onChange={(e) => setSuperOrgId(e.target.value)}
+              >
+                <option value="">Select organization…</option>
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Your account is not linked to an organization. Contact a platform administrator.
+            </p>
+          )}
+        </div>
+      </AdminHierarchyPageShell>
     );
   }
 
-  if (isLoading) return <div className="p-6 text-gray-500">Loading configuration…</div>;
+  if (isLoading) {
+    return (
+      <AdminHierarchyPageShell
+        title="Structural terminology"
+        subtitle="Loading your organization’s hierarchy labels…"
+      >
+        <div className="px-6 py-12 text-center text-sm text-indigo-800/75">Loading configuration…</div>
+      </AdminHierarchyPageShell>
+    );
+  }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      <div className="p-6 border-b">
-        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <Layers className="text-emerald-600" />
-          Structural Terminology
-        </h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Define vocabulary for your organization’s branch hierarchy (e.g. Region, Zone, Woreda, Branch).
-        </p>
+    <AdminHierarchyPageShell
+      title="Structural terminology"
+      subtitle="Define vocabulary for your organization’s branch hierarchy (e.g. Region, Zone, Woreda, Branch)."
+    >
+      <div className="border-b border-indigo-100/60 bg-white/50 px-4 py-4 sm:px-6">
         {isSuperAdmin && (
-          <div className="mt-4 max-w-md">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Organization</label>
+          <div className="max-w-md">
+            <label className="mb-1 block text-xs font-medium text-indigo-900/80">Organization</label>
             <select
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-indigo-200/90 bg-white px-3 py-2.5 text-sm text-neutral-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
               value={superOrgId}
               onChange={(e) => setSuperOrgId(e.target.value)}
             >
@@ -136,60 +143,80 @@ export default function UnitTypeConfigurator({ currentUser }: { currentUser: Use
         )}
       </div>
 
-      <div className="p-6">
-        <div className="mb-8 space-y-3">
+      {unitTypes.length > 0 && (
+        <div className="border-b border-indigo-100/70 bg-gradient-to-r from-violet-50/60 via-white to-indigo-50/45 px-4 py-4 sm:px-6">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-800/55">
+            Level ladder — saved terminology
+          </p>
+          <HierarchyLevelsGraphic
+            levels={unitTypes.map((t: any) => ({
+              id: String(t.id),
+              level: Number(t.level),
+              name: String(t.name ?? ''),
+            }))}
+          />
+        </div>
+      )}
+
+      <div className="p-4 sm:p-6">
+        <div className="mb-6 space-y-3 sm:mb-8">
           {unitTypes.map((type: any) => (
             <div
               key={type.id}
-              className="flex items-center gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-sm"
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-100/90 bg-white/90 p-4 shadow-md shadow-indigo-950/[0.04] ring-1 ring-indigo-950/[0.03] sm:gap-4"
             >
-              <div className="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded text-sm min-w-[80px] text-center uppercase tracking-wider">
+              <div className="min-w-[5.5rem] rounded-lg border border-violet-200 bg-gradient-to-br from-violet-100 to-indigo-100 px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wider text-indigo-900">
                 Level {type.level}
               </div>
-              <div className="font-medium text-gray-800 text-lg">{type.name}</div>
+              <div className="text-lg font-medium text-neutral-800">{type.name}</div>
             </div>
           ))}
           {unitTypes.length === 0 && (
-            <div className="p-4 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-200">
+            <div className="rounded-xl border border-amber-200/90 bg-amber-50/90 p-4 text-sm text-amber-950">
               No hierarchy defined yet. Create Level 1 (e.g. Region or Head Office).
             </div>
           )}
         </div>
 
         {nextLevel <= 5 ? (
-          <form onSubmit={handleCreate} className="bg-emerald-50 border border-emerald-100 rounded-xl p-5">
-            <h3 className="font-medium text-emerald-900 mb-4 flex items-center gap-2">
-              <Plus size={18} />
-              Define Level {nextLevel} nomenclature
+          <form
+            onSubmit={handleCreate}
+            className="rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-indigo-50/90 to-violet-50/60 p-5 shadow-inner"
+          >
+            <h3 className="mb-4 flex items-center gap-2 font-medium text-indigo-950">
+              <Plus className="text-indigo-600" size={18} aria-hidden />
+              Define level {nextLevel} nomenclature
             </h3>
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex flex-wrap gap-3">
               <input
                 required
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="flex-1 min-w-[200px] rounded-lg border-emerald-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 px-4 py-2 bg-white"
+                className="min-w-[200px] flex-1 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/25"
                 placeholder={`e.g. ${nextLevel === 1 ? 'Region' : nextLevel === 2 ? 'Zone' : 'Office'}`}
               />
               <button
                 type="submit"
                 disabled={isCreating || !name.trim()}
-                className="px-6 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCreating ? 'Saving…' : (
+                {isCreating ? (
+                  'Saving…'
+                ) : (
                   <>
-                    <Save size={18} /> Save level
+                    <Save size={18} aria-hidden /> Save level
                   </>
                 )}
               </button>
             </div>
           </form>
         ) : (
-          <div className="p-4 bg-gray-100 text-gray-600 rounded-lg text-sm text-center">
+          <div className="rounded-xl border border-neutral-200 bg-neutral-100/80 p-4 text-center text-sm text-neutral-600">
             Maximum depth of 5 levels reached.
           </div>
         )}
       </div>
-    </div>
+    </AdminHierarchyPageShell>
   );
 }

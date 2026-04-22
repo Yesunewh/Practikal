@@ -62,15 +62,15 @@ export default function RemediationPage({ onNavigate }: RemediationPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-neutral-50 p-8">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Review mistakes</h1>
-        <p className="text-gray-600 mb-8">
+        <h1 className="text-2xl font-bold text-neutral-900 mb-2">Review mistakes</h1>
+        <p className="text-neutral-600 mb-8">
           Steps you answered incorrectly on past attempts. Retry the challenge to improve your score.
         </p>
 
         {useGamificationApi && isFetching && (
-          <p className="text-sm text-gray-500 mb-4">Loading your attempts from the server…</p>
+          <p className="text-sm text-neutral-500 mb-4">Loading your attempts from the server…</p>
         )}
 
         {useGamificationApi && isError && !usedServer && (
@@ -80,11 +80,11 @@ export default function RemediationPage({ onNavigate }: RemediationPageProps) {
         )}
 
         {useGamificationApi && usedServer && !isFetching && (progressData?.attempts?.length ?? 0) === 0 && (
-          <p className="text-sm text-gray-500 mb-4">No challenge attempts on your account yet.</p>
+          <p className="text-sm text-neutral-500 mb-4">No challenge attempts on your account yet.</p>
         )}
 
         {items.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+          <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center text-neutral-500">
             No missed steps recorded yet. Complete challenges (with the app connected to the server) to build your
             review list.
           </div>
@@ -93,13 +93,13 @@ export default function RemediationPage({ onNavigate }: RemediationPageProps) {
             {items.map((item, idx) => (
               <li
                 key={`${item.attemptId}-${item.stepId}-${idx}`}
-                className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-3"
+                className="bg-white rounded-xl border border-neutral-200 p-4 flex flex-wrap items-center justify-between gap-3"
               >
                 <div className="flex items-start gap-3">
                   <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
                   <div>
-                    <div className="font-medium text-gray-900">{item.challengeTitle}</div>
-                    <div className="text-sm text-gray-500">
+                    <div className="font-medium text-neutral-900">{item.challengeTitle}</div>
+                    <div className="text-sm text-neutral-500">
                       Step {item.stepId} · {item.category} · {item.completedAt.toLocaleDateString()}
                     </div>
                   </div>

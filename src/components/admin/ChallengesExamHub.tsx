@@ -77,7 +77,7 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
     return (
       <div className="rounded-xl border border-amber-100 bg-amber-50 p-6 text-amber-900">
         <p className="font-semibold">No access</p>
-        <p className="mt-1 text-sm">You need Exam Bank or Custom Challenges permission to use this page.</p>
+        <p className="mt-1 text-sm">You need catalog or challenge authoring permission to use this page.</p>
       </div>
     );
   }
@@ -87,7 +87,7 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
   return (
     <div className="space-y-4">
       {showTabs && (
-        <div className="flex flex-wrap gap-2 rounded-2xl border border-gray-200/80 bg-white p-1.5 shadow-sm">
+        <div className="flex flex-wrap gap-2 rounded-2xl border border-neutral-200/80 bg-white p-1.5 shadow-sm">
           {canBank && (
             <button
               type="button"
@@ -95,11 +95,11 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
               className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${
                 activeTab === 'bank'
                   ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  : 'text-neutral-600 hover:bg-neutral-50'
               }`}
             >
               <FileQuestion size={18} className="shrink-0" aria-hidden />
-              Exam bank
+              Catalog
             </button>
           )}
           {canAuthor && (
@@ -109,7 +109,7 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
               className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${
                 activeTab === 'authoring'
                   ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  : 'text-neutral-600 hover:bg-neutral-50'
               }`}
             >
               <FileText size={18} className="shrink-0" aria-hidden />

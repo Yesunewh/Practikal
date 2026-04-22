@@ -159,6 +159,12 @@ export interface Assignment {
   challengeId: string;
   title: string;
   dueDate: string;
+  /** Active users in org (assign-all); null for platform-wide scope */
+  audienceTotal?: number | null;
+  /** Users with a passing attempt by due date */
+  completedCount?: number;
+  /** 0–100 when audienceTotal is known */
+  completionPercent?: number | null;
 }
 
 /** How a quiz-style step is authored and shown to learners */

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { User } from '../../types';
-import { LayoutDashboard, Users, BookOpen, BarChart2, Settings, Shield, Building2 } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, BarChart2, Shield, Building2 } from 'lucide-react';
 
 
 interface AdminNavigationProps {
@@ -42,7 +42,7 @@ export default function AdminNavigation({ currentUser }: AdminNavigationProps) {
           className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-emerald-50 text-gray-700 hover:text-emerald-700"
         >
           <BookOpen size={18} className="mr-3" />
-          Challenges &amp; exam bank
+          Learning challenges
         </Link>
         
         <Link 
@@ -63,17 +63,6 @@ export default function AdminNavigation({ currentUser }: AdminNavigationProps) {
           </Link>
         )}
 
-        {isSuperAdmin && (
-          <Link 
-            to="/admin/settings" 
-            className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-emerald-50 text-gray-700 hover:text-emerald-700"
-          >
-            <Settings size={18} className="mr-3" />
-            System Settings
-          </Link>
-        )}
-
-        
         {isSuperAdmin && (
           <Link 
             to="/admin/admins" 

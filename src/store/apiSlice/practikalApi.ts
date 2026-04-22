@@ -322,6 +322,40 @@ export const practikalApi = createApi({
       query: () => '/gamification/assignments/me',
       providesTags: ['Gamification'],
     }),
+    getGamificationTrainingAssignmentsAdmin: builder.query({
+      query: (arg?: { org_id?: string }) => {
+        const params = new URLSearchParams();
+        if (arg?.org_id) params.set('org_id', arg.org_id);
+        const qs = params.toString();
+        return `/gamification/assignments${qs ? `?${qs}` : ''}`;
+      },
+      providesTags: ['Gamification'],
+    }),
+    createGamificationTrainingAssignment: builder.mutation<
+      { success: boolean; assignment: unknown },
+      {
+        challenge_id: string;
+        title: string;
+        due_date: string;
+        assign_all: boolean;
+        user_id?: string | null;
+        org_id?: string | null;
+      }
+    >({
+      query: (body) => ({
+        url: '/gamification/assignments',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Gamification'],
+    }),
+    deleteGamificationTrainingAssignment: builder.mutation<{ success: boolean }, string>({
+      query: (id) => ({
+        url: `/gamification/assignments/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Gamification'],
+    }),
     getGamificationAchievementsMe: builder.query({
       query: () => '/gamification/achievements/me',
       providesTags: ['Gamification'],
@@ -416,6 +450,9 @@ export const {
   useCompleteGamificationChallengeMutation,
   useGetGamificationProgressMeQuery,
   useGetGamificationMyAssignmentsQuery,
+  useGetGamificationTrainingAssignmentsAdminQuery,
+  useCreateGamificationTrainingAssignmentMutation,
+  useDeleteGamificationTrainingAssignmentMutation,
   useGetGamificationAchievementsMeQuery,
   useGetGamificationLeaderboardQuery,
   useCreateGamificationChallengeMutation,

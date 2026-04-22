@@ -64,7 +64,7 @@ export default function PendingRegistrations({ currentUser }: PendingRegistratio
   );
 
   const [approveApplicant, { isLoading: approving }] = useApproveApplicantMutation();
-  const [rejectApplicant, { isLoading: rejectingId }] = useRejectApplicantMutation();
+  const [rejectApplicant, { isLoading: isRejecting }] = useRejectApplicantMutation();
 
   const orgs = orgsRes?.orgs ?? [];
   const depts = deptsRes?.depts ?? [];

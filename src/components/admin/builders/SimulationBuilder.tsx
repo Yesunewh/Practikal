@@ -76,15 +76,15 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-semibold text-gray-800 mb-2">Simulation builder</h3>
-        <p className="text-sm text-gray-500">
+        <h3 className="text-xl font-semibold text-neutral-800 mb-2">Simulation builder</h3>
+        <p className="text-sm text-neutral-500">
           Create hands-on, interactive cybersecurity training scenarios learners complete step by step.
         </p>
       </div>
 
       {/* Simulation Type Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">Simulation type *</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-3">Simulation type *</label>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             type="button"
@@ -92,12 +92,12 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
             className={`p-6 border-2 rounded-xl transition-all ${
               simulationType === 'email'
                 ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                : 'border-gray-200 hover:border-emerald-300'
+                : 'border-neutral-200 hover:border-emerald-300'
             }`}
           >
-            <Mail size={32} className={`mx-auto mb-3 ${simulationType === 'email' ? 'text-emerald-600' : 'text-gray-400'}`} />
-            <h4 className="font-bold text-gray-900 mb-1">Email security</h4>
-            <p className="text-xs text-gray-600">Identify phishing emails</p>
+            <Mail size={32} className={`mx-auto mb-3 ${simulationType === 'email' ? 'text-emerald-600' : 'text-neutral-400'}`} />
+            <h4 className="font-bold text-neutral-900 mb-1">Email security</h4>
+            <p className="text-xs text-neutral-600">Identify phishing emails</p>
           </button>
 
           <button
@@ -106,12 +106,12 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
             className={`p-6 border-2 rounded-xl transition-all ${
               simulationType === 'terminal'
                 ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                : 'border-gray-200 hover:border-emerald-300'
+                : 'border-neutral-200 hover:border-emerald-300'
             }`}
           >
-            <Terminal size={32} className={`mx-auto mb-3 ${simulationType === 'terminal' ? 'text-emerald-600' : 'text-gray-400'}`} />
-            <h4 className="font-bold text-gray-900 mb-1">Terminal commands</h4>
-            <p className="text-xs text-gray-600">Practice security commands</p>
+            <Terminal size={32} className={`mx-auto mb-3 ${simulationType === 'terminal' ? 'text-emerald-600' : 'text-neutral-400'}`} />
+            <h4 className="font-bold text-neutral-900 mb-1">Terminal commands</h4>
+            <p className="text-xs text-neutral-600">Practice security commands</p>
           </button>
 
           <button
@@ -120,19 +120,19 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
             className={`p-6 border-2 rounded-xl transition-all ${
               simulationType === 'firewall'
                 ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                : 'border-gray-200 hover:border-emerald-300'
+                : 'border-neutral-200 hover:border-emerald-300'
             }`}
           >
-            <Shield size={32} className={`mx-auto mb-3 ${simulationType === 'firewall' ? 'text-emerald-600' : 'text-gray-400'}`} />
-            <h4 className="font-bold text-gray-900 mb-1">Firewall config</h4>
-            <p className="text-xs text-gray-600">Configure security rules</p>
+            <Shield size={32} className={`mx-auto mb-3 ${simulationType === 'firewall' ? 'text-emerald-600' : 'text-neutral-400'}`} />
+            <h4 className="font-bold text-neutral-900 mb-1">Firewall config</h4>
+            <p className="text-xs text-neutral-600">Configure security rules</p>
           </button>
         </div>
       </div>
 
       {/* Title */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Simulation title *</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-2">Simulation title *</label>
         <input
           type="text"
           className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -144,7 +144,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
 
       {/* Instructions */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Instructions *</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-2">Instructions *</label>
         <textarea
           className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           rows={3}
@@ -157,7 +157,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
       {/* Tasks */}
       <div>
         <div className="flex justify-between items-center mb-3">
-          <label className="block text-sm font-medium text-gray-700">Tasks *</label>
+          <label className="block text-sm font-medium text-neutral-700">Tasks *</label>
           <button
             type="button"
             onClick={addTask}
@@ -169,27 +169,27 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
         </div>
 
         {/* Preview */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 mb-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase mb-4 text-center">
+        <div className="border-2 border-dashed border-neutral-300 rounded-lg p-6 bg-neutral-50 mb-4">
+          <p className="text-xs font-semibold text-neutral-500 uppercase mb-4 text-center">
             Simulation preview
           </p>
-          <div className="bg-white rounded-lg p-6 shadow-sm max-w-2xl mx-auto border border-gray-100">
-            <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+          <div className="bg-white rounded-lg p-6 shadow-sm max-w-2xl mx-auto border border-neutral-100">
+            <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-100">
               <SimIcon size={24} className="text-emerald-600" />
               <div>
-                <h4 className="font-bold text-gray-900">{title || 'Simulation title'}</h4>
-                <p className="text-sm text-gray-600">{simulationType.charAt(0).toUpperCase() + simulationType.slice(1)} simulation</p>
+                <h4 className="font-bold text-neutral-900">{title || 'Simulation title'}</h4>
+                <p className="text-sm text-neutral-600">{simulationType.charAt(0).toUpperCase() + simulationType.slice(1)} simulation</p>
               </div>
             </div>
-            <p className="text-sm text-gray-700 mb-4">{instructions || 'Instructions will appear here…'}</p>
+            <p className="text-sm text-neutral-700 mb-4">{instructions || 'Instructions will appear here…'}</p>
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase">Tasks</p>
+              <p className="text-xs font-semibold text-neutral-500 uppercase">Tasks</p>
               {tasks.map((task, index) => (
-                <div key={task.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div key={task.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg">
                   <div className="w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
                     {index + 1}
                   </div>
-                  <span className="text-sm text-gray-700 flex-1">
+                  <span className="text-sm text-neutral-700 flex-1">
                     {task.description || `Task ${index + 1} description…`}
                   </span>
                   <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded font-medium">
@@ -206,7 +206,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
           {tasks.map((task, index) => (
             <div key={task.id} className="border rounded-lg p-4 bg-white">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-medium text-gray-700">Task {index + 1}</span>
+                <span className="font-medium text-neutral-700">Task {index + 1}</span>
                 {tasks.length > 1 && (
                   <button
                     type="button"
@@ -221,7 +221,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Task description *</label>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Task description *</label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
@@ -231,7 +231,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Correct action / answer *</label>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Correct action / answer *</label>
                   <input
                     type="text"
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
@@ -241,7 +241,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Points</label>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Points</label>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
@@ -258,7 +258,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
 
       {/* Explanation */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Explanation (optional)</label>
+        <label className="block text-sm font-medium text-neutral-700 mb-2">Explanation (optional)</label>
         <textarea
           className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           rows={3}
@@ -273,7 +273,7 @@ export default function SimulationBuilder({ onSave, onCancel }: SimulationBuilde
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-3 border rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+          className="px-6 py-3 border rounded-lg text-neutral-700 hover:bg-neutral-50 font-medium"
         >
           Cancel
         </button>

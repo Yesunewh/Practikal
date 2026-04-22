@@ -233,42 +233,40 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Basic Information</h3>
-              <p className="text-sm text-gray-500 mb-6">Set up the basic details for your challenge</p>
+              <h3 className="text-xl font-semibold text-neutral-800 mb-4">Basic Information</h3>
+              <p className="text-sm text-neutral-500 mb-6">Set up the basic details for your challenge</p>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Challenge Title *</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Challenge Title *</label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="e.g., Password Security Basics"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.title}
                   onChange={(e) => handleBasicInfoChange('title', e.target.value)}
                 />
               </div>
 
               <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Description *</label>
                 <textarea
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   rows={4}
-                  placeholder="Describe what users will learn..."
                   value={challengeData.description}
                   onChange={(e) => handleBasicInfoChange('description', e.target.value)}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Challenge type</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Challenge type</label>
                 <div
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 capitalize"
+                  className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-900 capitalize"
                   title="Set on the previous step"
                 >
                   {challengeData.type}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-neutral-500">
                   {isEditMode
                     ? 'Type is fixed for this challenge.'
                     : 'Chosen on the type screen — use Previous to change it.'}
@@ -276,9 +274,9 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Difficulty</label>
                 <select
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.difficulty}
                   onChange={(e) => handleBasicInfoChange('difficulty', e.target.value)}
                 >
@@ -289,9 +287,9 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Category</label>
                 <select
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.category}
                   onChange={(e) => handleBasicInfoChange('category', e.target.value)}
                 >
@@ -305,10 +303,10 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes)</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Duration (minutes)</label>
                 <input
                   type="number"
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.duration}
                   onChange={(e) => handleBasicInfoChange('duration', parseInt(e.target.value))}
                   min="1"
@@ -316,10 +314,10 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">XP Reward</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">XP Reward</label>
                 <input
                   type="number"
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.xpReward}
                   onChange={(e) => handleBasicInfoChange('xpReward', parseInt(e.target.value))}
                   min="0"
@@ -327,10 +325,10 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Reputation Reward</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">Reputation Reward</label>
                 <input
                   type="number"
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.reputationReward}
                   onChange={(e) => handleBasicInfoChange('reputationReward', parseInt(e.target.value))}
                   min="0"
@@ -381,15 +379,15 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-semibold text-gray-800">Add Challenge Steps</h3>
-                <p className="text-sm text-gray-500 mt-1">{challengeData.steps.length} step(s) added</p>
+                <h3 className="text-xl font-semibold text-neutral-800">Add Challenge Steps</h3>
+                <p className="text-sm text-neutral-500 mt-1">{challengeData.steps.length} step(s) added</p>
               </div>
             </div>
 
             {/* Add Step Button */}
-            <div className="border-2 border-dashed rounded-lg p-8 bg-gray-50 text-center">
-              <h4 className="font-medium text-gray-700 mb-2">Ready to add steps?</h4>
-              <p className="text-sm text-gray-500 mb-4">
+            <div className="border-2 border-dashed border-neutral-200 rounded-lg p-8 bg-neutral-50 text-center">
+              <h4 className="font-medium text-neutral-700 mb-2">Ready to add steps?</h4>
+              <p className="text-sm text-neutral-500 mb-4">
                 Use the specialized {challengeData.type} builder to create interactive steps
               </p>
               <button
@@ -403,19 +401,19 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
 
             {/* List of Added Steps */}
             {challengeData.steps.length > 0 && (
-              <div className="border rounded-lg p-6">
-                <h4 className="font-medium text-gray-700 mb-4">Added Steps ({challengeData.steps.length})</h4>
+              <div className="border border-neutral-200 rounded-lg p-6">
+                <h4 className="font-medium text-neutral-700 mb-4">Added Steps ({challengeData.steps.length})</h4>
                 <div className="space-y-3">
                   {challengeData.steps.map((step, index) => (
-                    <div key={step.id} className="flex items-center justify-between p-4 bg-white border rounded-lg hover:border-emerald-300 transition-colors">
+                    <div key={step.id} className="flex items-center justify-between p-4 bg-white border border-neutral-200 rounded-lg hover:border-emerald-300 transition-colors">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium text-gray-500">Step {index + 1}</span>
+                          <span className="text-xs font-medium text-neutral-500">Step {index + 1}</span>
                           <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">
                             {step.type}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-700">{stepSummaryLine(step)}</p>
+                        <p className="text-sm text-neutral-700">{stepSummaryLine(step)}</p>
                       </div>
                       <button
                         onClick={() => removeStep(index)}
@@ -436,9 +434,9 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
           <div className="space-y-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h3 className="text-xl font-semibold text-gray-800">Review & publish</h3>
-                <p className="text-sm text-gray-500 mt-1 max-w-xl">
-                  Confirm basic info, read the description, and skim steps in order. Use <span className="font-medium text-gray-700">Previous</span> if anything needs a change.
+                <h3 className="text-xl font-semibold text-neutral-800">Review & publish</h3>
+                <p className="text-sm text-neutral-500 mt-1 max-w-xl">
+                  Confirm basic info, read the description, and skim steps in order. Use <span className="font-medium text-neutral-700">Previous</span> if anything needs a change.
                 </p>
               </div>
               <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
@@ -447,14 +445,14 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="mb-5 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                     <ClipboardList className="h-5 w-5" aria-hidden />
                   </div>
-                  <h4 className="font-semibold text-gray-800">Challenge summary</h4>
+                  <h4 className="font-semibold text-neutral-800">Challenge summary</h4>
                 </div>
-                <dl className="divide-y divide-gray-100 text-sm">
+                <dl className="divide-y divide-neutral-100 text-sm">
                   {[
                     ['Title', challengeData.title?.trim() || 'Not set'],
                     ['Type', formatDisplayLabel(challengeData.type)],
@@ -465,45 +463,45 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                     ['Total steps', String(challengeData.steps.length)],
                   ].map(([label, value]) => (
                     <div key={label} className="flex flex-col gap-0.5 py-3 first:pt-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-                      <dt className="shrink-0 text-gray-500">{label}</dt>
-                      <dd className="font-medium text-gray-900 text-right break-words sm:max-w-[60%]">{value}</dd>
+                      <dt className="shrink-0 text-neutral-500">{label}</dt>
+                      <dd className="font-medium text-neutral-900 text-right break-words sm:max-w-[60%]">{value}</dd>
                     </div>
                   ))}
                 </dl>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                     <FileText className="h-5 w-5" aria-hidden />
                   </div>
-                  <h4 className="font-semibold text-gray-800">Description</h4>
+                  <h4 className="font-semibold text-neutral-800">Description</h4>
                 </div>
-                <div className="max-h-52 min-h-[7.5rem] overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/90 px-4 py-3">
+                <div className="max-h-52 min-h-[7.5rem] overflow-y-auto rounded-lg border border-neutral-100 bg-neutral-50/90 px-4 py-3">
                   {challengeData.description?.trim() ? (
-                    <p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">{challengeData.description}</p>
+                    <p className="text-sm leading-relaxed text-neutral-800 whitespace-pre-wrap">{challengeData.description}</p>
                   ) : (
-                    <p className="text-sm italic text-gray-500">No description provided.</p>
+                    <p className="text-sm italic text-neutral-500">No description provided.</p>
                   )}
                 </div>
               </div>
             </div>
 
             {challengeData.steps.length > 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                       <ListOrdered className="h-5 w-5" aria-hidden />
                     </div>
-                    <h4 className="font-semibold text-gray-800">Steps</h4>
+                    <h4 className="font-semibold text-neutral-800">Steps</h4>
                   </div>
                 </div>
                 <ul className="space-y-3">
                   {challengeData.steps.map((step, index) => (
                     <li
                       key={step.id}
-                      className="flex gap-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4 transition-colors hover:border-emerald-200/90"
+                      className="flex gap-4 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4 transition-colors hover:border-emerald-200/90"
                     >
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-sm">
                         {index + 1}
@@ -514,7 +512,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                             {step.type}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-800">{stepSummaryLine(step)}</p>
+                        <p className="text-sm text-neutral-800">{stepSummaryLine(step)}</p>
                       </div>
                     </li>
                   ))}
@@ -533,35 +531,35 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
     <div className="rounded-xl bg-white shadow-xl">
       {/* Progress Bar */}
       {currentStep > 0 && (
-        <div className="px-8 pt-6 pb-4 bg-gray-50">
+        <div className="px-8 pt-6 pb-4 bg-neutral-50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 1 ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 1 ? 'bg-emerald-600 text-white' : 'bg-neutral-300 text-neutral-600'}`}>
                 1
               </div>
-              <span className={`text-sm font-semibold ${currentStep >= 1 ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <span className={`text-sm font-semibold ${currentStep >= 1 ? 'text-emerald-600' : 'text-neutral-400'}`}>
                 Basic Info
               </span>
             </div>
-            <div className="flex-1 h-1 mx-4 bg-gray-300 rounded-full">
-              <div className={`h-full rounded-full transition-all duration-300 ${currentStep >= 2 ? 'bg-emerald-600' : 'bg-gray-300'}`} style={{ width: currentStep >= 2 ? '100%' : '0%' }}></div>
+            <div className="flex-1 h-1 mx-4 bg-neutral-300 rounded-full">
+              <div className={`h-full rounded-full transition-all duration-300 ${currentStep >= 2 ? 'bg-emerald-600' : 'bg-neutral-300'}`} style={{ width: currentStep >= 2 ? '100%' : '0%' }}></div>
             </div>
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 2 ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 2 ? 'bg-emerald-600 text-white' : 'bg-neutral-300 text-neutral-600'}`}>
                 2
               </div>
-              <span className={`text-sm font-semibold ${currentStep >= 2 ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <span className={`text-sm font-semibold ${currentStep >= 2 ? 'text-emerald-600' : 'text-neutral-400'}`}>
                 Add Steps
               </span>
             </div>
-            <div className="flex-1 h-1 mx-4 bg-gray-300 rounded-full">
-              <div className={`h-full rounded-full transition-all duration-300 ${currentStep >= 3 ? 'bg-emerald-600' : 'bg-gray-300'}`} style={{ width: currentStep >= 3 ? '100%' : '0%' }}></div>
+            <div className="flex-1 h-1 mx-4 bg-neutral-300 rounded-full">
+              <div className={`h-full rounded-full transition-all duration-300 ${currentStep >= 3 ? 'bg-emerald-600' : 'bg-neutral-300'}`} style={{ width: currentStep >= 3 ? '100%' : '0%' }}></div>
             </div>
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 3 ? 'bg-emerald-600 text-white' : 'bg-gray-300 text-gray-600'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 3 ? 'bg-emerald-600 text-white' : 'bg-neutral-300 text-neutral-600'}`}>
                 3
               </div>
-              <span className={`text-sm font-semibold ${currentStep >= 3 ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <span className={`text-sm font-semibold ${currentStep >= 3 ? 'text-emerald-600' : 'text-neutral-400'}`}>
                 Review
               </span>
             </div>
@@ -576,12 +574,12 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
 
       {/* Footer */}
       {currentStep > 0 && (
-        <div className="p-8 border-t-2 bg-gray-50 flex justify-between rounded-b-xl">
+        <div className="p-8 border-t-2 bg-neutral-50 flex justify-between rounded-b-xl">
           <button
             type="button"
             onClick={() => setCurrentStep(Math.max(minStep, currentStep - 1))}
             disabled={currentStep <= minStep || isPublishing}
-            className="flex items-center px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-white hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all shadow-sm hover:shadow-md"
+            className="flex items-center px-6 py-3 border-2 border-neutral-300 rounded-xl text-neutral-700 hover:bg-white hover:border-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all shadow-sm hover:shadow-md"
           >
             <ArrowLeft size={20} className="mr-2" />
             Previous
@@ -592,7 +590,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               type="button"
               onClick={onCancel}
               disabled={isPublishing}
-              className="px-6 py-3 border-2 border-gray-300 rounded-xl text-gray-700 hover:bg-white hover:border-gray-400 font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 border-2 border-neutral-300 rounded-xl text-neutral-700 hover:bg-white hover:border-neutral-400 font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
@@ -612,7 +610,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                 onClick={() => void handleSave()}
                 disabled={isPublishing}
                 aria-busy={isPublishing}
-                className="flex items-center px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-50 disabled:cursor-not-allowed disabled:opacity-90"
+                className="flex items-center px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 disabled:cursor-not-allowed disabled:opacity-90"
               >
                 {isPublishing ? (
                   <>

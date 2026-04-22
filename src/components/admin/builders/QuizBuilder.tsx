@@ -42,7 +42,7 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
   const [explanation, setExplanation] = useState('');
   const [scenarioBody, setScenarioBody] = useState('');
   const [verdictContext, setVerdictContext] = useState<QuestionVerdictContext>({
-    clientBrand: 'YourMail',
+    clientBrand: 'Gmail',
     fromLine: '',
     subjectLine: '',
   });
@@ -55,6 +55,12 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
     } else if (kind === 'binary_verdict') {
       setOptions(VERDICT_OPTIONS());
       setMultipleAnswers(false);
+      setVerdictContext({
+        clientBrand: 'Gmail',
+        fromLine: 'info@insa.com.et',
+        subjectLine: 'your new acount',
+      });
+      setScenarioBody('dear azimeraw here is your account');
     }
   };
 
@@ -106,7 +112,7 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
         ? {
             scenarioBody: scenarioBody.trim(),
             verdictContext: {
-              clientBrand: verdictContext.clientBrand?.trim() || 'YourMail',
+              clientBrand: verdictContext.clientBrand?.trim() || 'Gmail',
               fromLine: verdictContext.fromLine?.trim(),
               subjectLine: verdictContext.subjectLine?.trim(),
             },
@@ -172,13 +178,13 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
 
       {questionKind === 'binary_verdict' && (
         <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
-          <h4 className="text-sm font-semibold text-gray-800">Mock message</h4>
+          <h4 className="text-sm font-semibold text-gray-800">Mock message (Gmail-style preview)</h4>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Client name</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Mail client label</label>
             <input
               type="text"
               className="w-full px-3 py-2 border rounded-lg text-sm"
-              placeholder="YourMail"
+              placeholder="Gmail"
               value={verdictContext.clientBrand ?? ''}
               onChange={(e) =>
                 setVerdictContext({ ...verdictContext, clientBrand: e.target.value })
@@ -190,7 +196,7 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
             <input
               type="text"
               className="w-full px-3 py-2 border rounded-lg text-sm"
-              placeholder='e.g. DocuSign via DocuSign &lt;review@docusign.review.com&gt;'
+              placeholder="e.g. info@insa.com.et or Name &lt;email@domain.com&gt;"
               value={verdictContext.fromLine ?? ''}
               onChange={(e) =>
                 setVerdictContext({ ...verdictContext, fromLine: e.target.value })

@@ -7,7 +7,6 @@ import {
   Gamepad2,
   Trophy,
   Medal,
-  HeadphonesIcon,
   LogOut,
   BookOpenCheck,
   Users,
@@ -19,7 +18,6 @@ import {
   UserCog,
   Lock,
   Building2,
-  Globe,
   FileStack,
   Layers,
   X,
@@ -106,7 +104,7 @@ const MENU_GROUPS: { title: string; items: SidebarMenuItem[] }[] = [
     items: [
       {
         id: 'admin-challenges',
-        label: 'Challenges & exam bank',
+        label: 'Learning challenges',
         icon: FileStack,
         path: '/admin/challenges',
         permissionsAny: ['MANAGE_EXAMS', 'MANAGE_CHALLENGES'],
@@ -128,12 +126,7 @@ const MENU_GROUPS: { title: string; items: SidebarMenuItem[] }[] = [
     items: [
       { id: 'admin-organizations', label: 'Tenants', icon: Building2, path: '/admin/organizations', permission: 'MANAGE_TENANTS' },
       { id: 'admin-departments', label: 'Departments & teams', icon: Layers, path: '/admin/departments', permission: 'MANAGE_DEPARTMENTS' },
-      { id: 'admin-settings', label: 'Platform Config', icon: Globe, path: '/admin/settings', permission: 'MANAGE_SYSTEM' },
     ],
-  },
-  {
-    title: 'Support',
-    items: [{ id: 'support', label: 'Help Desk', icon: HeadphonesIcon, path: '/support', permission: 'VIEW_SUPPORT' }],
   },
 ];
 
@@ -216,6 +209,7 @@ function AppContent() {
 
   const currentPage = getCurrentPage();
   const pageTitle = useMemo(() => pageTitleFromNav(currentPage), [currentPage]);
+  const isSuperAdminUser = user?.role === 'superadmin' || user?.user_type === 'SUPERADMIN';
 
   const hasPermission = (permission: string) => {
     if (!user) return false;
@@ -349,6 +343,7 @@ function AppContent() {
         <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5 -mr-0.5">
           {MENU_GROUPS.map((group, groupIdx) => {
             const visibleItems = group.items.filter((item) => {
+              if (item.id === 'admin-departments' && isSuperAdminUser) return false;
               if (item.permissionsAny?.length) {
                 return item.permissionsAny.some((p) => hasPermission(p));
               }

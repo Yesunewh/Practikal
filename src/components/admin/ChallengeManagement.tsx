@@ -46,12 +46,12 @@ function SuperadminPublishScopeCard({
     <div className="rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50/95 via-white to-white p-5 shadow-sm ring-1 ring-amber-100/60">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <label htmlFor={orgFieldId} className="text-xs font-semibold text-gray-800">
+          <label htmlFor={orgFieldId} className="text-xs font-semibold text-neutral-800">
             Tenant
           </label>
           <select
             id={orgFieldId}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none ring-emerald-500/0 transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
+            className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm outline-none ring-emerald-500/0 transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
             value={scopeOrgId}
             onChange={(e) => onOrgChange(e.target.value)}
           >
@@ -67,15 +67,15 @@ function SuperadminPublishScopeCard({
         <div className="space-y-1.5">
           <label
             htmlFor={deptFieldId}
-            className={`text-xs font-semibold ${hasTenant ? 'text-gray-800' : 'text-gray-400'}`}
+            className={`text-xs font-semibold ${hasTenant ? 'text-neutral-800' : 'text-neutral-400'}`}
           >
             Department
-            <span className="ml-1 font-normal text-gray-500">(optional)</span>
+            <span className="ml-1 font-normal text-neutral-500">(optional)</span>
           </label>
           {hasTenant ? (
             <select
               id={deptFieldId}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 shadow-sm outline-none ring-emerald-500/0 transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
+              className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 shadow-sm outline-none ring-emerald-500/0 transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
               value={scopeDeptId}
               onChange={(e) => onDeptChange(e.target.value)}
             >
@@ -89,7 +89,7 @@ function SuperadminPublishScopeCard({
           ) : (
             <div
               id={deptFieldId}
-              className="rounded-lg border border-dashed border-gray-200 bg-gray-50/80 px-3 py-2.5 text-xs leading-snug text-gray-500"
+              className="rounded-lg border border-dashed border-neutral-200 bg-neutral-50/80 px-3 py-2.5 text-xs leading-snug text-neutral-500"
             >
               Select a tenant to optionally limit this challenge to one department.
             </div>
@@ -102,6 +102,7 @@ function SuperadminPublishScopeCard({
 
 export default function ChallengeManagement({ currentUser }: ChallengeManagementProps) {
   const location = useLocation();
+  const challengeListSearchId = useId();
   const dispatch = useDispatch<AppDispatch>();
   const reduxChallenges = useSelector((state: { challenges: { challenges: Challenge[] } }) => state.challenges.challenges);
   const canManageApi =
@@ -109,10 +110,6 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
     (!!currentUser.deptId &&
       currentUser.role === 'admin' &&
       (currentUser.user_type == null || currentUser.user_type === ''));
-
-  const { data: apiList, refetch } = useGetGamificationChallengesQuery(undefined, {
-    skip: !useGamificationApi || !canManageApi,
-  });
 
   const [createChallengeApi, { isLoading: creatingApi }] = useCreateGamificationChallengeMutation();
   const [updateChallengeApi, { isLoading: updatingApi }] = useUpdateGamificationChallengeMutation();
@@ -130,6 +127,19 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
   const [scopeDeptId, setScopeDeptId] = useState(
     currentUser.user_type === 'ORG_ADMIN' ? '' : currentUser.deptId || '',
   );
+
+  const challengesQueryArg = useMemo(() => {
+    const base: { for_exam_bank: true; org_id?: string; dept_id?: string } = { for_exam_bank: true };
+    if (currentUser.user_type === 'SUPERADMIN') {
+      if (scopeOrgId.trim()) base.org_id = scopeOrgId.trim();
+      if (scopeDeptId.trim()) base.dept_id = scopeDeptId.trim();
+    }
+    return base;
+  }, [currentUser.user_type, scopeOrgId, scopeDeptId]);
+
+  const { data: apiList, refetch } = useGetGamificationChallengesQuery(challengesQueryArg, {
+    skip: !useGamificationApi || !canManageApi,
+  });
 
   const { data: orgsData } = useGetOrganizationsQuery(undefined, {
     skip: !useGamificationApi || !canManageApi || currentUser.user_type !== 'SUPERADMIN',
@@ -189,7 +199,9 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
 
   useEffect(() => {
     if (useGamificationApi && canManageApi && apiList?.challenges?.length) {
-      dispatch(setChallenges(apiList.challenges as Challenge[]));
+      const list = apiList.challenges as Challenge[];
+      // Learner-facing redux sync: active catalog only (admin list includes archived)
+      dispatch(setChallenges(list.filter((c) => c.isActive !== false)));
     }
   }, [useGamificationApi, canManageApi, apiList?.challenges, dispatch]);
 
@@ -203,6 +215,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterScope, setFilterScope] = useState<'all' | 'global' | 'organization' | 'department'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'archived'>('all');
   const [isCreating, setIsCreating] = useState(false);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
 
@@ -245,7 +258,12 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
       (filterScope === 'global' && !challenge.orgId && !challenge.deptId) ||
       (filterScope === 'organization' && !!challenge.orgId && !challenge.deptId) ||
       (filterScope === 'department' && !!challenge.deptId);
-    return matchesSearch && matchesType && matchesScope;
+    const isArchived = challenge.isActive === false;
+    const matchesStatus =
+      filterStatus === 'all' ||
+      (filterStatus === 'active' && !isArchived) ||
+      (filterStatus === 'archived' && isArchived);
+    return matchesSearch && matchesType && matchesScope && matchesStatus;
   });
 
   const resolvePublishScope = () => {
@@ -375,6 +393,9 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
     }
   };
 
+  const getStatusStyle = (isArchived: boolean) =>
+    isArchived ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+
   const getChallengeTypeColor = (type: string) => {
     switch (type) {
       case 'quiz':
@@ -390,7 +411,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
       case 'verification':
         return 'text-red-700 bg-red-100';
       default:
-        return 'text-gray-700 bg-gray-100';
+        return 'text-neutral-700 bg-neutral-100';
     }
   };
 
@@ -419,7 +440,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
             </label>
             <select
               id="org-admin-scope-dept"
-              className="w-full max-w-md rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
+              className="w-full max-w-md rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
               value={scopeDeptId}
               onChange={(e) => setScopeDeptId(e.target.value)}
             >
@@ -433,7 +454,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
           </div>
         )}
         {useGamificationApi && canManageApi && currentUser.user_type === 'DEPT_ADMIN' && (
-          <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+          <p className="text-sm text-neutral-600 bg-neutral-50 rounded-lg p-3">
             Scope stays tied to <strong>your department</strong> when you save.
           </p>
         )}
@@ -443,7 +464,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
           onSave={handleUpdateChallenge}
           onCancel={() => setEditingChallenge(null)}
         />
-        {updatingApi && <p className="text-sm text-gray-500">Saving to server…</p>}
+        {updatingApi && <p className="text-sm text-neutral-500">Saving to server…</p>}
       </div>
     );
   }
@@ -471,7 +492,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
             </label>
             <select
               id="org-admin-scope-dept-create"
-              className="w-full max-w-md rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
+              className="w-full max-w-md rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
               value={scopeDeptId}
               onChange={(e) => setScopeDeptId(e.target.value)}
             >
@@ -485,7 +506,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
           </div>
         )}
         {useGamificationApi && canManageApi && currentUser.user_type === 'DEPT_ADMIN' && (
-          <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+          <p className="text-sm text-neutral-600 bg-neutral-50 rounded-lg p-3">
             Challenges you publish are scoped to <strong>your department</strong> only.
           </p>
         )}
@@ -493,7 +514,7 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
           onSave={handleSaveChallenge}
           onCancel={() => setIsCreating(false)}
         />
-        {creatingApi && <p className="text-sm text-gray-500">Saving to server…</p>}
+        {creatingApi && <p className="text-sm text-neutral-500">Saving to server…</p>}
       </div>
     );
   }
@@ -501,7 +522,9 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
   return (
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <h2 className="text-lg font-semibold text-gray-800">Challenge Management</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-neutral-800">Challenge authoring</h2>
+        </div>
         <button
           onClick={() => setIsCreating(true)}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 flex items-center"
@@ -514,19 +537,22 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
       <div className="p-6 border-b">
         <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
           <div className="relative w-full md:w-64">
+            <label htmlFor={challengeListSearchId} className="sr-only">
+              Search challenges
+            </label>
             <input
+              id={challengeListSearchId}
               type="text"
-              placeholder="Search challenges..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="w-full pl-10 pr-4 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <Search size={18} className="absolute left-3 top-2.5 text-gray-400" />
+            <Search size={18} className="absolute left-3 top-2.5 text-neutral-400 pointer-events-none" aria-hidden />
           </div>
 
           <div className="relative w-full md:w-48">
             <select
-              className="w-full pl-4 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
+              className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
             >
@@ -536,12 +562,12 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
                 </option>
               ))}
             </select>
-            <ChevronDown size={18} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
+            <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
           </div>
 
           <div className="relative w-full md:w-56">
             <select
-              className="w-full pl-4 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
+              className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
               value={filterScope}
               onChange={(e) => setFilterScope(e.target.value as typeof filterScope)}
             >
@@ -550,48 +576,74 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
               <option value="organization">Organization</option>
               <option value="department">Department</option>
             </select>
-            <ChevronDown size={18} className="absolute right-3 top-2.5 text-gray-400 pointer-events-none" />
+            <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
+          </div>
+
+          <div className="relative w-full md:w-44">
+            <select
+              className="w-full pl-4 pr-10 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 appearance-none"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </select>
+            <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
           </div>
         </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-neutral-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                 Challenge
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                 Scope
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reward</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Reward</th>
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider"
+                title="Total completion attempts recorded (all learners)"
+              >
+                Attempts
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {filteredChallenges.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-8 text-center text-sm text-neutral-500">
+                  No challenges match your filters.
+                </td>
+              </tr>
+            ) : null}
             {filteredChallenges.map((challenge: Challenge) => (
-              <tr key={challenge.id} className="hover:bg-gray-50">
+              <tr key={challenge.id} className="hover:bg-neutral-50">
                 <td className="px-6 py-4">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-                      <FileText size={20} className="text-gray-500" />
+                    <div className="flex-shrink-0 h-10 w-10 rounded-full bg-neutral-100 flex items-center justify-center">
+                      <FileText size={20} className="text-neutral-500" />
                     </div>
                     <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{challenge.title}</div>
-                      <div className="text-xs text-gray-500 max-w-xs truncate">{challenge.description}</div>
+                      <div className="text-sm font-medium text-neutral-900">{challenge.title}</div>
+                      <div className="text-xs text-neutral-500 max-w-xs truncate">{challenge.description}</div>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-xs text-gray-600">
+                <td className="px-6 py-4 text-xs text-neutral-600">
                   {(() => {
                     const { title, subtitle } = challengeScopeLines(challenge);
                     return (
                       <div>
-                        <div className="font-medium text-gray-800">{title}</div>
-                        {subtitle ? <div className="text-gray-500 mt-0.5">{subtitle}</div> : null}
+                        <div className="font-medium text-neutral-800">{title}</div>
+                        {subtitle ? <div className="text-neutral-500 mt-0.5">{subtitle}</div> : null}
                       </div>
                     );
                   })()}
@@ -606,18 +658,23 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <Award size={16} className="text-amber-500 mr-1" />
-                    <span className="text-sm text-gray-900">{challenge.xpReward} XP</span>
+                    <span className="text-sm text-neutral-900">{challenge.xpReward} XP</span>
                   </div>
                   {challenge.reputationReward ? (
                     <div className="flex items-center mt-1">
                       <Award size={16} className="text-blue-500 mr-1" />
-                      <span className="text-xs text-gray-500">{challenge.reputationReward} Reputation</span>
+                      <span className="text-xs text-neutral-500">{challenge.reputationReward} Reputation</span>
                     </div>
                   ) : null}
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-900">
+                  {(challenge.attemptCount ?? 0).toLocaleString()}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                    Active
+                  <span
+                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusStyle(challenge.isActive === false)}`}
+                  >
+                    {challenge.isActive === false ? 'Archived' : 'Active'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -645,20 +702,20 @@ export default function ChallengeManagement({ currentUser }: ChallengeManagement
       </div>
 
       <div className="px-6 py-4 border-t flex items-center justify-between">
-        <div className="text-sm text-gray-700">
+        <div className="text-sm text-neutral-700">
           Showing <span className="font-medium">{filteredChallenges.length}</span> of{' '}
           <span className="font-medium">{allChallenges.length}</span> challenges
         </div>
         <div className="flex space-x-2">
           <button
             type="button"
-            className="px-4 py-2 border rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            className="px-4 py-2 border border-neutral-200 rounded-md text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50"
           >
             Previous
           </button>
           <button
             type="button"
-            className="px-4 py-2 border rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            className="px-4 py-2 border border-neutral-200 rounded-md text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50"
           >
             Next
           </button>

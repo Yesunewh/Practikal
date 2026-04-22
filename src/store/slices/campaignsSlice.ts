@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Assignment, Campaign } from '../../types';
+import { useGamificationApi } from '../../config/gamification';
 
 const STORAGE_CAMPAIGNS = 'practikal-campaigns';
 const STORAGE_ASSIGNMENTS = 'practikal-assignments';
@@ -58,15 +59,19 @@ const campaignsSlice = createSlice({
     addAssignment: (state, action: PayloadAction<Omit<Assignment, 'id'>>) => {
       const assignment: Assignment = { ...action.payload, id: `asg_${Date.now()}` };
       state.assignments.push(assignment);
-      localStorage.setItem(STORAGE_ASSIGNMENTS, JSON.stringify(state.assignments));
+      if (!useGamificationApi) {
+        localStorage.setItem(STORAGE_ASSIGNMENTS, JSON.stringify(state.assignments));
+      }
     },
     deleteAssignment: (state, action: PayloadAction<string>) => {
       state.assignments = state.assignments.filter((x) => x.id !== action.payload);
-      localStorage.setItem(STORAGE_ASSIGNMENTS, JSON.stringify(state.assignments));
+      if (!useGamificationApi) {
+        localStorage.setItem(STORAGE_ASSIGNMENTS, JSON.stringify(state.assignments));
+      }
     },
     initializeCampaigns: (state) => {
       state.campaigns = loadCampaignsFromStorage();
-      state.assignments = loadAssignmentsFromStorage();
+      state.assignments = useGamificationApi ? [] : loadAssignmentsFromStorage();
     },
   },
 });
