@@ -1,17 +1,16 @@
-import { Link } from 'react-router-dom';
 import { User, Rank } from '../types';
-import { Check, Info, Lock, TrendingUp } from 'lucide-react';
+import { Check, Lock, TrendingUp } from 'lucide-react';
 import { xpProgressInCurrentTier } from '../utils/gamificationMetrics';
+import { useI18n } from '../i18n/I18nContext';
+import { interpolate } from '../i18n/messages';
 
 interface LeaderboardHeaderProps {
   user: User;
-  /** Organization name from profile / API (shown in standings context). */
-  organizationLabel?: string;
-  /** Current leaderboard scope, e.g. "Your organization". */
-  scopeLabel?: string;
 }
 
-export default function LeaderboardHeader({ user, organizationLabel, scopeLabel }: LeaderboardHeaderProps) {
+export default function LeaderboardHeader({ user }: LeaderboardHeaderProps) {
+  const { messages } = useI18n();
+  const lb = messages.leaderboard;
   const ranks: Rank[] = ['beginner', 'medior', 'senior', 'professional', 'specialist', 'master', 'legend'];
 
   const formatDate = () => {
@@ -21,58 +20,24 @@ export default function LeaderboardHeader({ user, organizationLabel, scopeLabel 
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-      <h1 className="text-3xl font-bold text-gray-800 mb-2">Leaderboard</h1>
-      <p className="text-gray-600 mb-3">
-        Standings compare learners by <strong>total XP</strong> (primary order), plus reputation, count of challenges
-        mastered (70%+ or pass), and activity streaks. This page does <strong>not</strong> control who appears on the
-        board — challenge locks only affect which training you can open on the <strong>Challenges</strong> page.
-      </p>
-      {(organizationLabel || scopeLabel) && (
-        <p className="text-sm text-emerald-800 font-medium mb-4">
-          {scopeLabel && <span>{scopeLabel}</span>}
-          {organizationLabel && scopeLabel && ' · '}
-          {organizationLabel && <span>{organizationLabel}</span>}
-        </p>
-      )}
-
-      <div className="rounded-lg border border-slate-200 bg-slate-50/90 px-4 py-3 mb-6 flex gap-3 text-sm text-slate-700">
-        <Info className="shrink-0 w-5 h-5 text-slate-500 mt-0.5" aria-hidden />
-        <div>
-          <p className="font-medium text-slate-800 mb-1">Challenge difficulty locks (by category)</p>
-          <p className="text-slate-600">
-            On <strong>Challenges</strong>, each <strong>topic</strong> (e.g. Phishing, Password) unlocks{' '}
-            <strong>intermediate</strong> only after every <strong>visible beginner</strong> in that topic is mastered,
-            and <strong>advanced</strong> after every <strong>visible intermediate</strong>. That is separate from the{' '}
-            <strong>XP rank</strong> ladder below (Beginner → Legend), which is based only on how much XP you have
-            earned.
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Link to="/challenges" className="text-emerald-700 hover:text-emerald-800 font-medium">
-              Open Challenges — locks show on each card
-            </Link>
-            <span className="text-slate-500 text-xs">Full write-up: repo file docs/UI_USER_GUIDE.md §4.2</span>
-          </div>
-        </div>
-      </div>
+      <h1 className="text-3xl font-bold text-gray-800 mb-2">{lb.headerTitle}</h1>
+      {lb.headerIntro?.trim() ? <p className="text-gray-600 mb-3">{lb.headerIntro}</p> : null}
 
       <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Your XP rank ladder</h2>
-        <p className="text-xs text-gray-500 mb-3">
-          These steps are <strong>XP levels only</strong> (not challenge topics). Earn XP from passed challenges to move
-          right along the ladder.
-        </p>
-        <div className="flex flex-wrap gap-3 text-xs text-gray-600 mb-4" role="list" aria-label="Rank state legend">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">{lb.rankLadderTitle}</h2>
+        {lb.rankLadderHelp?.trim() ? <p className="text-xs text-gray-500 mb-3">{lb.rankLadderHelp}</p> : null}
+        <div className="flex flex-wrap gap-3 text-xs text-gray-600 mb-4" role="list" aria-label={lb.rankLegendAria}>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-1">
             <Check className="w-3.5 h-3.5 text-emerald-600" aria-hidden />
-            <span>Unlocked</span>
+            <span>{lb.legendUnlocked}</span>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white border-2 border-emerald-600 px-2.5 py-1">
             <span className="w-2 h-2 rounded-full bg-emerald-600" aria-hidden />
-            <span>Current</span>
+            <span>{lb.legendCurrent}</span>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 border border-dashed border-gray-300 px-2.5 py-1">
             <Lock className="w-3.5 h-3.5 text-gray-400" aria-hidden />
-            <span>Locked — need more XP</span>
+            <span>{lb.legendLocked}</span>
           </span>
         </div>
       </div>
@@ -81,7 +46,7 @@ export default function LeaderboardHeader({ user, organizationLabel, scopeLabel 
         <div
           className="flex flex-nowrap gap-3 sm:gap-4 overflow-x-auto pb-2 w-full max-w-full [scrollbar-width:thin]"
           role="list"
-          aria-label="XP rank steps"
+          aria-label={lb.rankListAria}
         >
           {ranks.map((rank, index) => {
             const currentIdxRaw = ranks.indexOf(user.rank.current);
@@ -122,7 +87,7 @@ export default function LeaderboardHeader({ user, organizationLabel, scopeLabel 
                     isPastRank ? 'text-emerald-600' : isCurrentRank ? 'text-emerald-700' : 'text-gray-400'
                   }`}
                 >
-                  {isPastRank ? 'Unlocked' : isCurrentRank ? 'Current' : 'Locked'}
+                  {isPastRank ? lb.legendUnlocked : isCurrentRank ? lb.legendCurrent : lb.rankLadderLockedShort}
                 </span>
                 {isCurrentRank && <span className="text-[10px] text-gray-500 mt-1">{formatDate()}</span>}
               </div>
@@ -135,16 +100,17 @@ export default function LeaderboardHeader({ user, organizationLabel, scopeLabel 
             <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
               <TrendingUp className="w-3 h-3" aria-hidden />
             </span>
-            <h3 className="font-medium">Next XP rank</h3>
+            <h3 className="font-medium">{lb.nextXpCardTitle}</h3>
           </div>
           <div className="text-sm text-gray-600 mb-2">
-            Next tier: <strong>{user.rank.next.charAt(0).toUpperCase() + user.rank.next.slice(1)}</strong>
-            {user.xpToNextLevel > 0 ? (
-              <>
-                {' '}
-                — <strong>{user.xpToNextLevel.toLocaleString()}</strong> XP remaining in this tier.
-              </>
-            ) : null}
+            {user.xpToNextLevel > 0
+              ? interpolate(lb.nextTierWithXp, {
+                  rank: user.rank.next.charAt(0).toUpperCase() + user.rank.next.slice(1),
+                  xp: user.xpToNextLevel.toLocaleString(),
+                })
+              : interpolate(lb.nextTierOnly, {
+                  rank: user.rank.next.charAt(0).toUpperCase() + user.rank.next.slice(1),
+                })}
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
@@ -156,7 +122,7 @@ export default function LeaderboardHeader({ user, organizationLabel, scopeLabel 
       </div>
 
       <div className="mb-2">
-        <h2 className="text-2xl font-bold text-gray-800">Standings</h2>
+        <h2 className="text-2xl font-bold text-gray-800">{lb.standingsHeading}</h2>
       </div>
     </div>
   );

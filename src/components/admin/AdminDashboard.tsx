@@ -1,6 +1,5 @@
 import { useLocation, Navigate } from 'react-router-dom';
 import { User } from '../../types';
-import { Users, BookOpen, Shield, BarChart2, TrendingUp } from 'lucide-react';
 
 import UserManagement from './UserManagement';
 import SystemSettings from './SystemSettings';
@@ -15,9 +14,13 @@ import UnitTypeConfigurator from './UnitTypeConfigurator';
 import PermissionManager from './PermissionManager';
 import BulkUserImport from './BulkUserImport';
 import PendingRegistrations from './PendingRegistrations';
+import AdminSystemReportsHub from './AdminSystemReportsHub';
+import OrgDetails from './OrgDetails';
+import CategoryManagement from './CategoryManagement';
 
 import { downloadCsv } from '../../utils/csv';
 import { reviveAttempts } from '../../utils/progressCalculations';
+import { isSuperAdminUser } from '../../utils/authIdentity';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -43,187 +46,83 @@ export default function AdminDashboard({ currentUser, onBack }: AdminDashboardPr
     // Sidebar links to /admin/campaigns; content lives under the legacy "assignments" tab id
     if (sub === 'campaigns') return 'assignments';
     if (sub === 'departments') return 'departments';
+    if (sub.startsWith('organizations/')) return 'org-details';
     return sub;
   };
 
   const activeTab = getActiveTab();
+  const orgSlug = activeTab === 'org-details' ? location.pathname.replace('/admin/organizations/', '') : null;
 
-  const isSuperAdmin = currentUser.role === 'superadmin';
-  const isOrgAdmin = currentUser.user_type === 'ORG_ADMIN';
-  const canAccessTerminology = isSuperAdmin || isOrgAdmin;
-  const canUseDepartments =
-    isSuperAdmin ||
-    currentUser.user_type === 'ORG_ADMIN' ||
-    currentUser.user_type === 'DEPT_ADMIN' ||
-    (currentUser.role === 'admin' &&
-      !!currentUser.deptId &&
-      (currentUser.user_type == null || currentUser.user_type === ''));
+  const isSuperAdmin = isSuperAdminUser(currentUser);
   
-  // Stats for the overview dashboard
-  const stats = {
-    totalUsers: 1254,
-    activeUsers: 876,
-    completedChallenges: 8721,
-    averageScore: 78,
+  const legacyDeptHeadConsole =
+    currentUser.role === 'admin' &&
+    !!currentUser.deptId &&
+    (currentUser.user_type == null || currentUser.user_type === '');
+  const isOrgAdmin = currentUser.user_type === 'ORG_ADMIN' || (currentUser.role === 'admin' && currentUser.orgId && !currentUser.user_type && !legacyDeptHeadConsole && !isSuperAdmin);
+  const isDeptHead = currentUser.user_type === 'DEPT_ADMIN' || legacyDeptHeadConsole;
+  const isBranchAdmin = currentUser.user_type === 'UNIT_ADMIN';
+
+  const checkPerm = (p: string) => {
+    if (isSuperAdmin) return true;
+    if (currentUser.permissions?.includes(p)) return true;
+    if (['MANAGE_TENANTS', 'MANAGE_SYSTEM'].includes(p)) return false;
+    if (['MANAGE_USERS', 'IMPORT_USERS', 'VIEW_REPORTS'].includes(p)) return isOrgAdmin || isDeptHead || isBranchAdmin;
+    if (p === 'MANAGE_DEPARTMENTS') return isOrgAdmin;
+    if (p === 'MANAGE_EXAMS') return isOrgAdmin || isDeptHead;
+    if (['MANAGE_CAMPAIGNS', 'MANAGE_CHALLENGES'].includes(p)) return isOrgAdmin || isDeptHead || isBranchAdmin;
+    if (['MANAGE_TERMINOLOGY', 'MANAGE_ROLES', 'MANAGE_PERMISSIONS', 'MANAGE_HIERARCHY'].includes(p)) return isOrgAdmin;
+    return false;
   };
+
+  const hasTabAccess = () => {
+    // SuperAdmin restrictions: block them from accessing these routes directly
+    if (isSuperAdmin && ['departments', 'terminology', 'hierarchy', 'bulk', 'reports'].includes(activeTab)) {
+      return false;
+    }
+
+    switch (activeTab) {
+      case 'overview': return true; // Fallback route
+      case 'users': return checkPerm('MANAGE_USERS');
+      case 'challenges': return checkPerm('MANAGE_EXAMS') || checkPerm('MANAGE_CHALLENGES');
+      case 'reports': return checkPerm('VIEW_REPORTS');
+      case 'assignments': return checkPerm('MANAGE_CAMPAIGNS');
+      case 'settings': return isSuperAdmin;
+      case 'organizations': return checkPerm('MANAGE_TENANTS');
+      case 'org-details': return checkPerm('MANAGE_TENANTS');
+      case 'departments': return checkPerm('MANAGE_DEPARTMENTS');
+      case 'terminology': return checkPerm('MANAGE_TERMINOLOGY');
+      case 'hierarchy': return checkPerm('MANAGE_HIERARCHY');
+      case 'roles': return checkPerm('MANAGE_ROLES');
+      case 'permissions': return checkPerm('MANAGE_PERMISSIONS');
+      case 'bulk': return checkPerm('IMPORT_USERS');
+      case 'pending-users': return checkPerm('MANAGE_USERS');
+      case 'categories': return isSuperAdmin;
+      default: return true;
+    }
+  };
+
+  if (!hasTabAccess() && activeTab !== 'overview') {
+    return <Navigate to="/admin" replace />;
+  }
 
   return (
     <div className="flex w-full min-h-screen flex-col bg-gray-50">
       <div className="min-h-0 flex-1 overflow-auto transition-all duration-300">
         <main className="p-4 sm:p-6">
-          {activeTab === 'overview' && (
-            <div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-emerald-500">
-                  <h3 className="text-gray-500 text-sm font-medium mb-1">Total Users</h3>
-                  <p className="text-3xl font-bold text-gray-800">{stats.totalUsers}</p>
-                  <div className="flex items-center mt-2">
-                    <span className="text-green-500 text-sm font-medium">+3.2%</span>
-                    <span className="text-gray-500 text-sm ml-2">from last month</span>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-blue-500">
-                  <h3 className="text-gray-500 text-sm font-medium mb-1">Active Users</h3>
-                  <p className="text-3xl font-bold text-gray-800">{stats.activeUsers}</p>
-                  <div className="flex items-center mt-2">
-                    <span className="text-green-500 text-sm font-medium">+5.1%</span>
-                    <span className="text-gray-500 text-sm ml-2">from last month</span>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-purple-500">
-                  <h3 className="text-gray-500 text-sm font-medium mb-1">Completed Challenges</h3>
-                  <p className="text-3xl font-bold text-gray-800">{stats.completedChallenges}</p>
-                  <div className="flex items-center mt-2">
-                    <span className="text-green-500 text-sm font-medium">+12.7%</span>
-                    <span className="text-gray-500 text-sm ml-2">from last month</span>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-amber-500">
-                  <h3 className="text-gray-500 text-sm font-medium mb-1">Average Score</h3>
-                  <p className="text-3xl font-bold text-gray-800">{stats.averageScore}%</p>
-                  <div className="flex items-center mt-2">
-                    <span className="text-green-500 text-sm font-medium">+2.4%</span>
-                    <span className="text-gray-500 text-sm ml-2">from last month</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <div className="p-6 border-b">
-                    <h2 className="text-lg font-semibold text-gray-800">Recent Activity</h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mr-3">
-                          <Users size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-800">New user <span className="font-medium">Emma Davis</span> registered</p>
-                          <p className="text-xs text-gray-500">2 hours ago</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 mr-3">
-                          <BookOpen size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-800"><span className="font-medium">Sarah Johnson</span> completed "Phishing Prevention" challenge</p>
-                          <p className="text-xs text-gray-500">5 hours ago</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 mr-3">
-                          <Shield size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-800">New admin <span className="font-medium">Alex Wilson</span> added by Super Admin</p>
-                          <p className="text-xs text-gray-500">Yesterday</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 mr-3">
-                          <BookOpen size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-800">New challenge <span className="font-medium">"Network Security Basics"</span> created</p>
-                          <p className="text-xs text-gray-500">2 days ago</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <div className="p-6 border-b">
-                    <h2 className="text-lg font-semibold text-gray-800">Top Performing Challenges</h2>
-                  </div>
-                  <div className="p-6">
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">Phishing Prevention</span>
-                          <span className="text-sm font-medium text-gray-700">92%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '92%' }}></div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">Password Security</span>
-                          <span className="text-sm font-medium text-gray-700">85%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">Secure Browsing</span>
-                          <span className="text-sm font-medium text-gray-700">78%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '78%' }}></div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-700">Data Privacy</span>
-                          <span className="text-sm font-medium text-gray-700">72%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '72%' }}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'overview' && checkPerm('VIEW_REPORTS') && <AdminSystemReportsHub currentUser={currentUser} />}
           
-          {activeTab === 'users' && (
+          {activeTab === 'users' && checkPerm('MANAGE_USERS') && (
             <UserManagement currentUser={currentUser} />
           )}
           
-          {activeTab === 'challenges' && <ChallengesExamHub currentUser={currentUser} />}
+          {activeTab === 'challenges' && (checkPerm('MANAGE_EXAMS') || checkPerm('MANAGE_CHALLENGES')) && <ChallengesExamHub currentUser={currentUser} />}
           
-          {activeTab === 'reports' && (
+          {activeTab === 'reports' && checkPerm('VIEW_REPORTS') && (
             <UserProgressReport currentUser={currentUser} />
           )}
 
-          {activeTab === 'assignments' && (
+          {activeTab === 'assignments' && checkPerm('MANAGE_CAMPAIGNS') && (
             <CampaignAssignments currentUser={currentUser} />
           )}
           
@@ -231,36 +130,44 @@ export default function AdminDashboard({ currentUser, onBack }: AdminDashboardPr
             <SystemSettings currentUser={currentUser} />
           )}
 
-          {activeTab === 'organizations' && isSuperAdmin && (
+          {activeTab === 'organizations' && checkPerm('MANAGE_TENANTS') && (
             <OrgManagement />
           )}
 
-          {activeTab === 'departments' && canUseDepartments && (
+          {activeTab === 'org-details' && checkPerm('MANAGE_TENANTS') && orgSlug && (
+            <OrgDetails orgSlug={orgSlug} />
+          )}
+
+          {activeTab === 'departments' && checkPerm('MANAGE_DEPARTMENTS') && (
             <DepartmentManagement currentUser={currentUser} />
           )}
 
-          {activeTab === 'terminology' && canAccessTerminology && (
+          {activeTab === 'terminology' && checkPerm('MANAGE_TERMINOLOGY') && (
             <UnitTypeConfigurator currentUser={currentUser} />
           )}
 
-          {activeTab === 'hierarchy' && (
+          {activeTab === 'hierarchy' && checkPerm('MANAGE_HIERARCHY') && (
             <BranchManagement currentUser={currentUser} />
           )}
 
-          {activeTab === 'roles' && (
+          {activeTab === 'roles' && checkPerm('MANAGE_ROLES') && (
             <RoleManagement currentUser={currentUser} />
           )}
 
-          {activeTab === 'permissions' && (
+          {activeTab === 'permissions' && checkPerm('MANAGE_PERMISSIONS') && (
             <PermissionManager currentUser={currentUser} />
           )}
 
-          {activeTab === 'bulk' && (
+          {activeTab === 'bulk' && checkPerm('IMPORT_USERS') && (
             <BulkUserImport currentUser={currentUser} />
           )}
 
-          {activeTab === 'pending-users' && (
+          {activeTab === 'pending-users' && checkPerm('MANAGE_USERS') && (
             <PendingRegistrations currentUser={currentUser} />
+          )}
+
+          {activeTab === 'categories' && isSuperAdmin && (
+            <CategoryManagement />
           )}
 
         </main>

@@ -1,5 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Trash2, ArrowLeft, ArrowRight, Check, ClipboardList, FileText, ListOrdered, Loader2 } from 'lucide-react';
+import { useI18n } from '../../i18n/I18nContext';
+import { interpolate, type Messages } from '../../i18n/messages';
+import { useGetCategoriesQuery } from '../../store/apiSlice/practikalApi';
+import { useGamificationApi } from '../../config/gamification';
 import {
   Challenge,
   ChallengeStep,
@@ -28,47 +32,49 @@ interface CreateChallengeProps {
   initialChallenge?: Challenge | null;
 }
 
-function stepSummaryLine(step: ChallengeStep): string {
+type CreateChallengeCopy = Messages['admin']['challengesHub']['createChallenge'];
+
+function stepSummaryLine(step: ChallengeStep, cc: CreateChallengeCopy): string {
   if (step.type === 'question') {
     const c = step.content as QuestionContent;
     const kind = questionKindLabel(c.questionKind);
-    const q = (c.question || '').trim() || 'Untitled';
+    const q = (c.question || '').trim() || cc.untitled;
     const short = q.length > 90 ? `${q.slice(0, 90)}…` : q;
-    return `${kind}: ${short}`;
+    return interpolate(cc.summaryQuiz, { kind, short });
   }
   if (step.type === 'simulation') {
     const c = step.content as SimulationContent;
     const kind = formatDisplayLabel(c.simulationType);
-    const t = (c.title || '').trim() || 'Untitled simulation';
+    const t = (c.title || '').trim() || cc.untitledSimulation;
     const short = t.length > 90 ? `${t.slice(0, 90)}…` : t;
-    return `${kind} simulation · ${short}`;
+    return interpolate(cc.summarySimulation, { kind, short });
   }
   if (step.type === 'scenario') {
     const c = step.content as ScenarioContent;
-    const s = (c.situation || '').trim() || 'Untitled scenario';
+    const s = (c.situation || '').trim() || cc.untitledScenario;
     const short = s.length > 90 ? `${s.slice(0, 90)}…` : s;
-    return `Scenario: ${short}`;
+    return interpolate(cc.summaryScenario, { short });
   }
   if (step.type === 'sequential') {
     const c = step.content as SequentialContent;
-    const q = (c.question || '').trim() || 'Untitled';
+    const q = (c.question || '').trim() || cc.untitled;
     const short = q.length > 90 ? `${q.slice(0, 90)}…` : q;
-    return `Sequential: ${short}`;
+    return interpolate(cc.summarySequential, { short });
   }
   if (step.type === 'image-verification') {
     const c = step.content as ImageVerificationContent;
-    const q = (c.question || '').trim() || 'Untitled';
+    const q = (c.question || '').trim() || cc.untitled;
     const short = q.length > 90 ? `${q.slice(0, 90)}…` : q;
-    return `Image check: ${short}`;
+    return interpolate(cc.summaryImageCheck, { short });
   }
   if (step.type === 'information') {
     const c = step.content as InformationContent;
-    const t = (c.title || '').trim() || 'Information step';
+    const t = (c.title || '').trim() || cc.informationStep;
     const short = t.length > 90 ? `${t.slice(0, 90)}…` : t;
     return short;
   }
   const raw = (step.content as { question?: string }).question?.trim();
-  return raw || 'Untitled step';
+  return raw || cc.untitledStep;
 }
 
 function formatDisplayLabel(value: string) {
@@ -107,24 +113,31 @@ function challengeToFormState(ch: Challenge): ReturnType<typeof emptyChallengeDa
   };
 }
 
-function getStepsValidationError(steps: ChallengeStep[]): string | null {
+function getStepsValidationError(steps: ChallengeStep[], cc: CreateChallengeCopy): string | null {
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     if (step.type === 'question') {
       const msg = validateQuestionContent(step.content as QuestionContent);
-      if (msg) return `Step ${i + 1} (quiz): ${msg}`;
+      if (msg) return interpolate(cc.stepQuizError, { n: i + 1, msg });
     }
     if (step.type === 'scenario') {
       const msg = validateScenarioContent(step.content as ScenarioContent);
-      if (msg) return `Step ${i + 1} (scenario): ${msg}`;
+      if (msg) return interpolate(cc.stepScenarioError, { n: i + 1, msg });
     }
   }
   return null;
 }
 
 export default function CreateChallenge({ onSave, onCancel, initialChallenge = null }: CreateChallengeProps) {
+  const { messages } = useI18n();
+  const cc = messages.admin.challengesHub.createChallenge;
   const isEditMode = Boolean(initialChallenge?.id);
   const minStep = isEditMode ? 1 : 0;
+
+  const { data: categoriesApi } = useGetCategoriesQuery(undefined, {
+    skip: !useGamificationApi,
+  });
+  const dbCategories = useMemo(() => categoriesApi?.categories || [], [categoriesApi]);
 
   const [currentStep, setCurrentStep] = useState(() => (isEditMode ? 1 : 0));
   const [showBuilder, setShowBuilder] = useState(false);
@@ -148,16 +161,16 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
     if (isPublishing) return;
 
     if (challengeData.steps.length === 0) {
-      toast.error('Add at least one step before publishing.');
+      toast.error(cc.toastAddStepBeforePublish);
       return;
     }
 
     if (!challengeData.title?.trim() || !challengeData.description?.trim()) {
-      toast.error('Title and description are required.');
+      toast.error(cc.toastTitleDescRequired);
       return;
     }
 
-    const stepErr = getStepsValidationError(challengeData.steps);
+    const stepErr = getStepsValidationError(challengeData.steps, cc);
     if (stepErr) {
       toast.error(stepErr);
       return;
@@ -174,22 +187,22 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
   const tryAdvanceStep = () => {
     if (currentStep === 1) {
       if (!challengeData.title?.trim() || !challengeData.description?.trim()) {
-        toast.error('Title and description are required.');
+        toast.error(cc.toastTitleDescRequired);
         return;
       }
       const duration = Number(challengeData.duration);
       if (!Number.isFinite(duration) || duration < 1) {
-        toast.error('Duration must be at least 1 minute.');
+        toast.error(cc.toastDurationMin);
         return;
       }
       const xp = Number(challengeData.xpReward);
       const rep = Number(challengeData.reputationReward);
       if (!Number.isFinite(xp) || xp < 0) {
-        toast.error('XP reward must be 0 or greater.');
+        toast.error(cc.toastXpNonNeg);
         return;
       }
       if (!Number.isFinite(rep) || rep < 0) {
-        toast.error('Reputation reward must be 0 or greater.');
+        toast.error(cc.toastRepNonNeg);
         return;
       }
       setCurrentStep(2);
@@ -198,14 +211,14 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
 
     if (currentStep === 2) {
       if (showBuilder) {
-        toast.error('Finish or cancel the step builder before continuing.');
+        toast.error(cc.toastFinishBuilder);
         return;
       }
       if (challengeData.steps.length === 0) {
-        toast.error('Add at least one step before continuing.');
+        toast.error(cc.toastAddStepContinue);
         return;
       }
-      const stepErr = getStepsValidationError(challengeData.steps);
+      const stepErr = getStepsValidationError(challengeData.steps, cc);
       if (stepErr) {
         toast.error(stepErr);
         return;
@@ -233,13 +246,13 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-neutral-800 mb-4">Basic Information</h3>
-              <p className="text-sm text-neutral-500 mb-6">Set up the basic details for your challenge</p>
+              <h3 className="text-xl font-semibold text-neutral-800 mb-4">{cc.basicInfoTitle}</h3>
+              <p className="text-sm text-neutral-500 mb-6">{cc.basicInfoSubtitle}</p>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Challenge Title *</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelTitle}</label>
                 <input
                   type="text"
                   className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -249,7 +262,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Description *</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelDescription}</label>
                 <textarea
                   className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   rows={4}
@@ -259,51 +272,59 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Challenge type</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelChallengeType}</label>
                 <div
                   className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-900 capitalize"
-                  title="Set on the previous step"
+                  title={cc.typeSetOnPrevious}
                 >
                   {challengeData.type}
                 </div>
                 <p className="mt-1 text-xs text-neutral-500">
-                  {isEditMode
-                    ? 'Type is fixed for this challenge.'
-                    : 'Chosen on the type screen — use Previous to change it.'}
+                  {isEditMode ? cc.typeHintEdit : cc.typeHintCreate}
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Difficulty</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelDifficulty}</label>
                 <select
                   className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   value={challengeData.difficulty}
                   onChange={(e) => handleBasicInfoChange('difficulty', e.target.value)}
                 >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
+                  <option value="beginner">{cc.optBeginner}</option>
+                  <option value="intermediate">{cc.optIntermediate}</option>
+                  <option value="advanced">{cc.optAdvanced}</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Category</label>
-                <select
-                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  value={challengeData.category}
-                  onChange={(e) => handleBasicInfoChange('category', e.target.value)}
-                >
-                  <option value="general">General</option>
-                  <option value="phishing">Phishing</option>
-                  <option value="malware">Malware</option>
-                  <option value="password">Password</option>
-                  <option value="social-engineering">Social Engineering</option>
-                  <option value="incident-response">Incident Response</option>
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelCategory}</label>
+              <select
+                className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                value={challengeData.category}
+                onChange={(e) => handleBasicInfoChange('category', e.target.value)}
+              >
+                {dbCategories.length > 0 ? (
+                  dbCategories.map((cat: any) => (
+                    <option key={cat.id} value={cat.slug || cat.name.toLowerCase()}>
+                      {cat.name}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="general">{cc.catGeneral}</option>
+                    <option value="phishing">{cc.catPhishing}</option>
+                    <option value="malware">{cc.catMalware}</option>
+                    <option value="password">{cc.catPassword}</option>
+                    <option value="social-engineering">{cc.catSocialEng}</option>
+                    <option value="incident-response">{cc.catIncident}</option>
+                  </>
+                )}
+              </select>
+            </div>
 
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Duration (minutes)</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelDuration}</label>
                 <input
                   type="number"
                   className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -314,7 +335,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">XP Reward</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelXp}</label>
                 <input
                   type="number"
                   className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -325,7 +346,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">Reputation Reward</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-2">{cc.labelReputation}</label>
                 <input
                   type="number"
                   className="w-full px-4 py-3 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -379,41 +400,50 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-semibold text-neutral-800">Add Challenge Steps</h3>
-                <p className="text-sm text-neutral-500 mt-1">{challengeData.steps.length} step(s) added</p>
+                <h3 className="text-xl font-semibold text-neutral-800">{cc.stepsTitle}</h3>
+                <p className="text-sm text-neutral-500 mt-1">
+                  {interpolate(cc.stepsAdded, { count: challengeData.steps.length })}
+                </p>
               </div>
             </div>
 
             {/* Add Step Button */}
             <div className="border-2 border-dashed border-neutral-200 rounded-lg p-8 bg-neutral-50 text-center">
-              <h4 className="font-medium text-neutral-700 mb-2">Ready to add steps?</h4>
+              <h4 className="font-medium text-neutral-700 mb-2">{cc.readyAddTitle}</h4>
               <p className="text-sm text-neutral-500 mb-4">
-                Use the specialized {challengeData.type} builder to create interactive steps
+                {interpolate(cc.readyAddBody, { type: challengeData.type })}
               </p>
               <button
                 onClick={() => setShowBuilder(true)}
                 className="bg-emerald-600 text-white px-6 py-3 rounded-lg hover:bg-emerald-700 font-medium inline-flex items-center"
               >
                 <Plus size={18} className="mr-2" />
-                Open {challengeData.type.charAt(0).toUpperCase() + challengeData.type.slice(1)} Builder
+                {interpolate(cc.openBuilder, {
+                  typeLabel:
+                    challengeData.type.charAt(0).toUpperCase() + challengeData.type.slice(1),
+                })}
               </button>
             </div>
 
             {/* List of Added Steps */}
             {challengeData.steps.length > 0 && (
               <div className="border border-neutral-200 rounded-lg p-6">
-                <h4 className="font-medium text-neutral-700 mb-4">Added Steps ({challengeData.steps.length})</h4>
+                <h4 className="font-medium text-neutral-700 mb-4">
+                  {interpolate(cc.addedStepsTitle, { count: challengeData.steps.length })}
+                </h4>
                 <div className="space-y-3">
                   {challengeData.steps.map((step, index) => (
                     <div key={step.id} className="flex items-center justify-between p-4 bg-white border border-neutral-200 rounded-lg hover:border-emerald-300 transition-colors">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium text-neutral-500">Step {index + 1}</span>
+                          <span className="text-xs font-medium text-neutral-500">
+                            {interpolate(cc.stepN, { n: index + 1 })}
+                          </span>
                           <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded font-medium">
                             {step.type}
                           </span>
                         </div>
-                        <p className="text-sm text-neutral-700">{stepSummaryLine(step)}</p>
+                        <p className="text-sm text-neutral-700">{stepSummaryLine(step, cc)}</p>
                       </div>
                       <button
                         onClick={() => removeStep(index)}
@@ -434,13 +464,13 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
           <div className="space-y-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h3 className="text-xl font-semibold text-neutral-800">Review & publish</h3>
-                <p className="text-sm text-neutral-500 mt-1 max-w-xl">
-                  Confirm basic info, read the description, and skim steps in order. Use <span className="font-medium text-neutral-700">Previous</span> if anything needs a change.
-                </p>
+                <h3 className="text-xl font-semibold text-neutral-800">{cc.reviewTitle}</h3>
+                <p className="text-sm text-neutral-500 mt-1 max-w-xl">{cc.reviewIntro}</p>
               </div>
               <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-                {challengeData.steps.length} step{challengeData.steps.length === 1 ? '' : 's'}
+                {challengeData.steps.length === 1
+                  ? cc.stepsBadgeOne
+                  : interpolate(cc.stepsBadgeMany, { count: challengeData.steps.length })}
               </span>
             </div>
 
@@ -450,17 +480,26 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                     <ClipboardList className="h-5 w-5" aria-hidden />
                   </div>
-                  <h4 className="font-semibold text-neutral-800">Challenge summary</h4>
+                  <h4 className="font-semibold text-neutral-800">{cc.challengeSummaryTitle}</h4>
                 </div>
                 <dl className="divide-y divide-neutral-100 text-sm">
                   {[
-                    ['Title', challengeData.title?.trim() || 'Not set'],
-                    ['Type', formatDisplayLabel(challengeData.type)],
-                    ['Difficulty', formatDisplayLabel(challengeData.difficulty)],
-                    ['Category', formatDisplayLabel(challengeData.category)],
-                    ['Duration', `${challengeData.duration} min`],
-                    ['Rewards', `${challengeData.xpReward} XP · ${challengeData.reputationReward} rep`],
-                    ['Total steps', String(challengeData.steps.length)],
+                    [cc.dtTitle, challengeData.title?.trim() || cc.notSet],
+                    [cc.dtType, formatDisplayLabel(challengeData.type)],
+                    [cc.dtDifficulty, formatDisplayLabel(challengeData.difficulty)],
+                    [cc.dtCategory, formatDisplayLabel(challengeData.category)],
+                    [
+                      cc.dtDuration,
+                      interpolate(cc.durationMinValue, { n: challengeData.duration }),
+                    ],
+                    [
+                      cc.dtRewards,
+                      interpolate(cc.rewardsValue, {
+                        xp: challengeData.xpReward,
+                        rep: challengeData.reputationReward,
+                      }),
+                    ],
+                    [cc.dtTotalSteps, String(challengeData.steps.length)],
                   ].map(([label, value]) => (
                     <div key={label} className="flex flex-col gap-0.5 py-3 first:pt-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
                       <dt className="shrink-0 text-neutral-500">{label}</dt>
@@ -475,13 +514,13 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                     <FileText className="h-5 w-5" aria-hidden />
                   </div>
-                  <h4 className="font-semibold text-neutral-800">Description</h4>
+                  <h4 className="font-semibold text-neutral-800">{cc.descriptionTitle}</h4>
                 </div>
                 <div className="max-h-52 min-h-[7.5rem] overflow-y-auto rounded-lg border border-neutral-100 bg-neutral-50/90 px-4 py-3">
                   {challengeData.description?.trim() ? (
                     <p className="text-sm leading-relaxed text-neutral-800 whitespace-pre-wrap">{challengeData.description}</p>
                   ) : (
-                    <p className="text-sm italic text-neutral-500">No description provided.</p>
+                    <p className="text-sm italic text-neutral-500">{cc.noDescription}</p>
                   )}
                 </div>
               </div>
@@ -494,7 +533,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
                       <ListOrdered className="h-5 w-5" aria-hidden />
                     </div>
-                    <h4 className="font-semibold text-neutral-800">Steps</h4>
+                    <h4 className="font-semibold text-neutral-800">{cc.stepsListTitle}</h4>
                   </div>
                 </div>
                 <ul className="space-y-3">
@@ -512,7 +551,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                             {step.type}
                           </span>
                         </div>
-                        <p className="text-sm text-neutral-800">{stepSummaryLine(step)}</p>
+                        <p className="text-sm text-neutral-800">{stepSummaryLine(step, cc)}</p>
                       </div>
                     </li>
                   ))}
@@ -538,7 +577,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                 1
               </div>
               <span className={`text-sm font-semibold ${currentStep >= 1 ? 'text-emerald-600' : 'text-neutral-400'}`}>
-                Basic Info
+                {cc.wizardBasicInfo}
               </span>
             </div>
             <div className="flex-1 h-1 mx-4 bg-neutral-300 rounded-full">
@@ -549,7 +588,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                 2
               </div>
               <span className={`text-sm font-semibold ${currentStep >= 2 ? 'text-emerald-600' : 'text-neutral-400'}`}>
-                Add Steps
+                {cc.wizardAddSteps}
               </span>
             </div>
             <div className="flex-1 h-1 mx-4 bg-neutral-300 rounded-full">
@@ -560,7 +599,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                 3
               </div>
               <span className={`text-sm font-semibold ${currentStep >= 3 ? 'text-emerald-600' : 'text-neutral-400'}`}>
-                Review
+                {cc.wizardReview}
               </span>
             </div>
           </div>
@@ -582,7 +621,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
             className="flex items-center px-6 py-3 border-2 border-neutral-300 rounded-xl text-neutral-700 hover:bg-white hover:border-neutral-400 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all shadow-sm hover:shadow-md"
           >
             <ArrowLeft size={20} className="mr-2" />
-            Previous
+            {cc.previous}
           </button>
 
           <div className="flex gap-4">
@@ -592,7 +631,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
               disabled={isPublishing}
               className="px-6 py-3 border-2 border-neutral-300 rounded-xl text-neutral-700 hover:bg-white hover:border-neutral-400 font-semibold transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancel
+              {cc.cancel}
             </button>
             
             {currentStep < 3 ? (
@@ -601,7 +640,7 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                 onClick={tryAdvanceStep}
                 className="flex items-center px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:from-emerald-700 hover:to-emerald-800 font-bold shadow-lg hover:shadow-xl transition-all"
               >
-                Next Step
+                {cc.nextStep}
                 <ArrowRight size={20} className="ml-2" />
               </button>
             ) : (
@@ -615,12 +654,12 @@ export default function CreateChallenge({ onSave, onCancel, initialChallenge = n
                 {isPublishing ? (
                   <>
                     <Loader2 size={20} className="mr-2 shrink-0 animate-spin" aria-hidden />
-                    {isEditMode ? 'Saving…' : 'Publishing…'}
+                    {isEditMode ? cc.saving : cc.publishing}
                   </>
                 ) : (
                   <>
                     <Check size={20} className="mr-2 shrink-0" strokeWidth={2.5} aria-hidden />
-                    {isEditMode ? 'Save changes' : 'Publish Challenge'}
+                    {isEditMode ? cc.saveChanges : cc.publishChallenge}
                   </>
                 )}
               </button>

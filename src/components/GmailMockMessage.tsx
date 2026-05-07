@@ -4,22 +4,28 @@ import {
   Archive,
   ChevronDown,
   ChevronLeft,
+  ExternalLink,
   FolderInput,
   Keyboard,
   MoreHorizontal,
+  Printer,
   Reply,
-  Settings,
+  Search,
   Star,
   Tag,
   Trash2,
+  User,
+  X,
 } from 'lucide-react';
 
 export interface GmailMockMessageProps {
   fromLine?: string;
   subjectLine?: string;
   body: string;
-  /** Shown in chrome; default Gmail */
+  /** Shown on the red Gmail chip; default Gmail */
   clientBrand?: string;
+  /** Crest + “MY UNIVERSITY” block under the body (reference template). */
+  institutionFooter?: boolean;
 }
 
 function parseFrom(line: string | undefined): { name: string; email: string } {
@@ -35,21 +41,66 @@ function parseFrom(line: string | undefined): { name: string; email: string } {
   return { name: raw, email: '' };
 }
 
+/** Multi-color “Google” wordmark (compact). */
+function GoogleWordmark() {
+  return (
+    <span className="inline-flex select-none items-baseline text-[1.35rem] font-medium tracking-tight">
+      <span className="text-[#4285F4]">G</span>
+      <span className="text-[#EA4335]">o</span>
+      <span className="text-[#FBBC04]">o</span>
+      <span className="text-[#4285F4]">g</span>
+      <span className="text-[#34A853]">l</span>
+      <span className="text-[#EA4335]">e</span>
+    </span>
+  );
+}
+
+/** Stylized crest: globe + book + wreath + MY UNIVERSITY (training mock). */
+function UniversityInstitutionFooter() {
+  return (
+    <div className="mt-8 flex items-end gap-3 border-t border-transparent pt-4">
+      <div className="shrink-0" aria-hidden>
+        <svg width="56" height="64" viewBox="0 0 56 64" className="text-[#1a56c4]">
+          <path
+            fill="currentColor"
+            opacity="0.35"
+            d="M8 44c4-8 10-14 20-14s16 6 20 14c-4 6-10 10-20 10S12 50 8 44z"
+          />
+          <circle cx="28" cy="26" r="14" fill="#e8f1fc" stroke="currentColor" strokeWidth="1.5" />
+          <ellipse cx="28" cy="26" rx="14" ry="5.5" fill="none" stroke="currentColor" strokeWidth="0.8" opacity="0.5" />
+          <path
+            fill="currentColor"
+            d="M18 20c2.5-4 6-6 10-6s7.5 2 10 6l-10 8-10-8z"
+            opacity="0.9"
+          />
+          <rect x="22" y="14" width="12" height="8" rx="0.5" fill="#fff" stroke="currentColor" strokeWidth="1" />
+          <path fill="currentColor" d="M25 14h6v2h-6v-2zm0 3h6v1h-6v-1z" opacity="0.4" />
+        </svg>
+      </div>
+      <p className="pb-1 font-sans text-sm font-bold uppercase tracking-wide text-[#1a56c4]">MY UNIVERSITY</p>
+    </div>
+  );
+}
+
 function BodyContent({ text }: { text: string }) {
   const lines = text.split('\n');
-  const urlLike = /^(https?:\/\/\S+|www\.\S+|[a-z0-9.-]+\.[a-z]{2,}\/\S*)$/i;
+  const urlLike =
+    /^(https?:\/\/\S+|www\.\S+|[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:\/\S*)?)$/i;
 
   return (
-    <div className="space-y-3 break-words font-[system-ui,'Segoe_UI',Roboto,Arial,sans-serif] text-sm leading-[1.6] text-neutral-800 sm:text-[15px]">
+    <div
+      className="space-y-3 break-words text-sm leading-[1.6] text-[#222222] sm:text-[15px]"
+      style={{ fontFamily: "Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+    >
       {lines.map((line, i) => {
         const t = line.trim();
         if (urlLike.test(t)) {
-          const href = t.startsWith('http') ? t : `https://${t}`;
+          const href = t.startsWith('http') ? t : t.startsWith('www.') ? `https://${t}` : `https://${t}`;
           return (
             <a
               key={i}
               href={href}
-              className="break-all text-[#1a73e8] underline decoration-[#1a73e8]/40 underline-offset-2"
+              className="break-all text-[#1155CC] underline decoration-[#1155CC]/50 underline-offset-2"
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.preventDefault()}
@@ -82,9 +133,15 @@ function ToolbarIcon({ children }: { children: ReactNode }) {
 }
 
 /**
- * Training-only Gmail-style chrome for binary-verdict steps (not a real mail client).
+ * Training-only Gmail web UI mock aligned with classic message view (not a real client).
  */
-export default function GmailMockMessage({ fromLine, subjectLine, body, clientBrand }: GmailMockMessageProps) {
+export default function GmailMockMessage({
+  fromLine,
+  subjectLine,
+  body,
+  clientBrand,
+  institutionFooter = false,
+}: GmailMockMessageProps) {
   const brand = clientBrand?.trim() || 'Gmail';
   const { name, email } = parseFrom(fromLine);
   const subject = subjectLine?.trim() || '(no subject)';
@@ -92,8 +149,30 @@ export default function GmailMockMessage({ fromLine, subjectLine, body, clientBr
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 max-h-[min(62dvh,520px)] flex-col overflow-hidden rounded-lg border border-neutral-200/90 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04] sm:max-h-[min(72dvh,560px)]">
-      {/* Gmail toolbar — horizontal scroll on narrow viewports */}
-      <div className="flex items-center gap-1 border-b border-neutral-200 bg-white py-1.5 pl-1 pr-0 sm:gap-2 sm:px-2 sm:pr-2">
+      {/* Google strip + search (reference layout) */}
+      <div className="shrink-0 border-b border-neutral-200 bg-white px-2 py-2 sm:px-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="shrink-0 pl-0.5">
+            <GoogleWordmark />
+          </div>
+          <div className="flex min-h-[44px] min-w-0 flex-1 items-center rounded-full bg-[#f1f3f4] px-3 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]">
+            <Search className="mr-2 h-[18px] w-[18px] shrink-0 text-[#5f6368]" strokeWidth={2} />
+            <span className="truncate text-[15px] text-[#5f6368]">Search mail</span>
+            <span className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1a73e8] text-white">
+              <Search className="h-4 w-4" strokeWidth={2.5} />
+            </span>
+          </div>
+          <div
+            className="hidden h-9 w-9 shrink-0 rounded-full bg-[#7b1fa2] sm:flex sm:items-center sm:justify-center sm:text-xs sm:font-medium sm:text-white"
+            aria-hidden
+          >
+            A
+          </div>
+        </div>
+      </div>
+
+      {/* Gmail toolbar */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-neutral-200 bg-white py-1.5 pl-1 pr-0 sm:gap-2 sm:px-2 sm:pr-2">
         <button
           type="button"
           className="flex shrink-0 items-center gap-0.5 rounded-md bg-[#c5221f] px-2 py-1.5 text-[11px] font-medium text-white shadow-sm sm:text-xs"
@@ -128,31 +207,51 @@ export default function GmailMockMessage({ fromLine, subjectLine, body, clientBr
               <Keyboard className="h-[1.15rem] w-[1.15rem] sm:h-5 sm:w-5" strokeWidth={1.75} />
             </ToolbarIcon>
             <ToolbarIcon>
-              <Settings className="h-[1.15rem] w-[1.15rem] sm:h-5 sm:w-5" strokeWidth={1.75} />
+              <MoreHorizontal className="h-[1.15rem] w-[1.15rem] sm:h-5 sm:w-5" strokeWidth={1.75} />
             </ToolbarIcon>
           </div>
         </div>
       </div>
 
-      {/* Subject */}
-      <div className="border-b border-neutral-100 px-3 py-2.5 sm:px-4 sm:py-3 lg:px-6 xl:px-8">
-        <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
-          <h3 className="min-w-0 flex-1 break-words text-lg font-normal leading-snug text-neutral-900 sm:text-[22px]">
+      {/* Subject + important marker + Inbox + actions */}
+      <div className="shrink-0 border-b border-neutral-100 px-3 py-2.5 sm:px-4 sm:py-3 lg:px-6 xl:px-8">
+        <div className="flex flex-wrap items-start gap-x-2 gap-y-2">
+          <h3 className="min-w-0 flex-1 break-words text-[1.05rem] font-normal leading-snug text-neutral-900 sm:text-[1.375rem]">
             {subject}
           </h3>
-          <span className="inline-flex shrink-0 items-center rounded border border-amber-300/90 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-950">
-            Inbox
-          </span>
+          <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2">
+            <span
+              className="inline-flex items-center rounded border border-amber-400/80 bg-amber-100/90 px-1 py-0.5 text-amber-900 shadow-sm"
+              title="Important"
+              aria-hidden
+            >
+              <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" strokeWidth={2.5} />
+            </span>
+            <span className="inline-flex items-center gap-0.5 rounded border border-neutral-300 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+              Inbox
+              <button type="button" className="rounded p-0.5 text-neutral-500 hover:bg-neutral-200/80" tabIndex={-1} aria-hidden>
+                <X className="h-3 w-3" strokeWidth={2.5} />
+              </button>
+            </span>
+            <ToolbarIcon>
+              <Printer className="h-[1.15rem] w-[1.15rem] sm:h-5 sm:w-5" strokeWidth={1.75} />
+            </ToolbarIcon>
+            <ToolbarIcon>
+              <ExternalLink className="h-[1.15rem] w-[1.15rem] sm:h-5 sm:w-5" strokeWidth={1.75} />
+            </ToolbarIcon>
+          </div>
         </div>
       </div>
 
-      {/* Sender row */}
-      <div className="border-b border-neutral-100 px-3 py-2.5 sm:px-4 sm:py-3 lg:px-6 xl:px-8">
+      {/* Sender */}
+      <div className="shrink-0 border-b border-neutral-100 px-3 py-2.5 sm:px-4 sm:py-3 lg:px-6 xl:px-8">
         <div className="flex gap-2 sm:gap-3">
           <div
-            className="mt-0.5 h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-neutral-300 to-neutral-400 sm:h-10 sm:w-10"
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e0e0e0] text-[#757575] sm:h-10 sm:w-10"
             aria-hidden
-          />
+          >
+            <User className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={1.75} />
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-col gap-0.5">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -173,7 +272,7 @@ export default function GmailMockMessage({ fromLine, subjectLine, body, clientBr
           </div>
           <div className="flex shrink-0 flex-col items-end text-xs text-neutral-500">
             <span className="whitespace-nowrap">12:18 PM</span>
-            <span className="hidden text-[11px] sm:inline">(50 min ago)</span>
+            <span className="hidden text-[11px] sm:inline">(50 minutes ago)</span>
           </div>
         </div>
         <div className="mt-2 flex justify-start gap-0.5 border-t border-transparent pt-1 pl-11 sm:mt-1 sm:pl-[3.25rem]">
@@ -192,13 +291,16 @@ export default function GmailMockMessage({ fromLine, subjectLine, body, clientBr
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white px-3 py-3 sm:px-6 sm:py-5 lg:px-8 xl:px-10">
         {body.trim() ? (
-          <BodyContent text={body} />
+          <>
+            <BodyContent text={body} />
+            {institutionFooter ? <UniversityInstitutionFooter /> : null}
+          </>
         ) : (
           <p className="text-sm italic text-neutral-400">—</p>
         )}
       </div>
 
-      <div className="border-t border-neutral-100 bg-neutral-50 px-2 py-1.5 text-center text-[10px] leading-snug text-neutral-400 sm:px-3 sm:py-2 sm:text-xs">
+      <div className="shrink-0 border-t border-neutral-100 bg-neutral-50 px-2 py-1.5 text-center text-[10px] leading-snug text-neutral-400 sm:px-3 sm:py-2 sm:text-xs">
         <span className="hidden sm:inline">Simulated inbox for training — not connected to {brand}</span>
         <span className="sm:hidden">Training simulation — not real {brand}</span>
       </div>

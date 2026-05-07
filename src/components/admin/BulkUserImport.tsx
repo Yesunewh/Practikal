@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
 import * as xlsx from 'xlsx';
-import { useGetUnitTreeQuery, useGetRolesQuery, useAdminCreateUserMutation } from '../../store/apiSlice/practikalApi';
+import { useGetRolesQuery, useGetDepartmentsQuery, useAdminCreateUserMutation } from '../../store/apiSlice/practikalApi';
+import { useI18n } from '../../i18n/I18nContext';
+import { interpolate } from '../../i18n/messages';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -8,6 +10,8 @@ import {
   AlertCircle,
   Loader2,
   Download,
+  Building2,
+  Layers,
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -16,13 +20,7 @@ type ParsedUserRow = {
   email: string;
   password: string;
   phone: string;
-};
-
-type UnitNode = {
-  id: string;
-  name: string;
-  children?: UnitNode[];
-  SubUnits?: UnitNode[];
+  role: string;
 };
 
 type RoleItem = {
@@ -43,12 +41,14 @@ function buildTemplateWorkbook() {
       email: 'jane.doe@example.com',
       phone: '0912345678',
       password: 'Welcome123!',
+      role: 'Department Admin',
     },
     {
       name: 'John Smith',
       email: 'john.smith@example.com',
       phone: '0987654321',
       password: '',
+      role: 'Learner',
     },
   ];
   const ws = xlsx.utils.json_to_sheet(rows);
@@ -57,15 +57,18 @@ function buildTemplateWorkbook() {
   return wb;
 }
 
-export default function BulkUserImport({ currentUser }: { currentUser: User }) {
-  const orgId = typeof currentUser.orgId === 'string' ? currentUser.orgId : undefined;
+const DEFAULT_IMPORT_PASSWORD = 'Welcome123!';
 
-  const { data: treeRes, isLoading: loadingTree } = useGetUnitTreeQuery(orgId);
+export default function BulkUserImport({ currentUser }: { currentUser: User }) {
+  const { messages } = useI18n();
+  const bi = messages.admin.bulkImport;
+  const orgId = typeof currentUser.orgId === 'string' ? currentUser.orgId : undefined;
   const { data: rolesRes, isLoading: loadingRoles } = useGetRolesQuery({ orgId, includeSystem: true });
+  const { data: deptsRes, isLoading: loadingDepts } = useGetDepartmentsQuery(orgId);
   const [createUser] = useAdminCreateUserMutation();
 
-  const [selectedUnitId, setSelectedUnitId] = useState('');
-  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [selectedUnitId, setSelectedUnitId] = useState(currentUser.unitId || '');
+  const [selectedDeptId, setSelectedDeptId] = useState(currentUser.deptId || '');
   const [parsedData, setParsedData] = useState<ParsedUserRow[]>([]);
   const [uploadStatus, setUploadStatus] = useState<string>('idle');
   const [logs, setLogs] = useState<LogRow[]>([]);
@@ -73,21 +76,29 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const units = (treeRes?.data ?? []) as UnitNode[];
-  const roles = (rolesRes?.data ?? []) as RoleItem[];
+  const rolesData = (rolesRes?.data ?? []) as RoleItem[];
+  const allDepartments = (deptsRes?.depts ?? []) as { id: string; name: string; unit_id?: string | null }[];
 
-  const flattenUnits = (nodes: UnitNode[], prefix = ''): { id: string; name: string }[] => {
-    let result: { id: string; name: string }[] = [];
-    for (const node of nodes) {
-      result.push({ id: node.id, name: `${prefix}${node.name}` });
-      const kids = node.SubUnits || node.children;
-      if (kids?.length) {
-        result = result.concat(flattenUnits(kids, `${prefix}— `));
-      }
-    }
-    return result;
-  };
-  const flatUnits = flattenUnits(units);
+  const roles = rolesData.filter(r => {
+    const n = r.name.toLowerCase();
+    return n.includes('learner') || n.includes('staff') || n.includes('department admin');
+  });
+
+  const isSuperAdmin = currentUser.user_type === 'SUPERADMIN' || currentUser.role === 'superadmin';
+  const isOrgAdmin = currentUser.user_type === 'ORG_ADMIN' || (currentUser.role === 'admin' && currentUser.orgId && !currentUser.user_type);
+  const isDeptAdmin = currentUser.user_type === 'DEPT_ADMIN' || (currentUser.role === 'admin' && !!currentUser.deptId && !currentUser.user_type);
+
+  const filteredDepartments = allDepartments.filter(d => {
+    // SuperAdmins and OrgAdmins can see all departments in the organization
+    if (isSuperAdmin || isOrgAdmin) return true;
+    
+    // DeptAdmins only see their own department
+    if (isDeptAdmin) return d.id === currentUser.deptId;
+    
+    // Others (like UNIT_ADMIN) only see departments in their own unit
+    if (!selectedUnitId) return !d.unit_id; 
+    return d.unit_id === selectedUnitId;
+  });
 
   const downloadTemplate = useCallback(() => {
     const wb = buildTemplateWorkbook();
@@ -100,7 +111,7 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
       .split(/\s+/)
       .filter(Boolean);
     const first_name = parts[0] || '';
-    const last_name = parts.slice(1).join(' ') || first_name || 'User';
+    const last_name = parts.slice(1).join(' ') || first_name || bi.defaultLastName;
     return { first_name, last_name };
   };
 
@@ -113,7 +124,7 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
   const processSpreadsheetFile = useCallback((file: File) => {
     const lower = file.name.toLowerCase();
     if (!lower.endsWith('.xlsx') && !lower.endsWith('.xls') && !lower.endsWith('.csv')) {
-      alert('Please choose an Excel or CSV file (.xlsx, .xls, .csv).');
+      alert(bi.alertWrongFile);
       return;
     }
 
@@ -142,8 +153,9 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
           .map((row) => ({
             name: readFirst(row, ['name', 'Name', 'NAME']),
             email: readFirst(row, ['email', 'Email', 'EMAIL']),
-            password: readFirst(row, ['password', 'Password', 'PASSWORD']) || 'Welcome123!',
+            password: readFirst(row, ['password', 'Password', 'PASSWORD']) || DEFAULT_IMPORT_PASSWORD,
             phone: readFirst(row, ['phone', 'Phone', 'PHONE']),
+            role: readFirst(row, ['role', 'Role', 'ROLE']) || 'Learner',
           }))
           .filter((r) => r.name && r.email && r.phone);
 
@@ -151,13 +163,11 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
         setUploadStatus('idle');
       } catch {
         setUploadStatus('idle');
-        alert(
-          'Could not read the file. Use the downloaded template: columns name, email, phone (required, 10 digits), password (optional).',
-        );
+        alert(bi.alertReadError);
       }
     };
     reader.readAsBinaryString(file);
-  }, []);
+  }, [bi.alertReadError, bi.alertWrongFile]);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -167,12 +177,10 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
   };
 
   const executeBulkImport = async () => {
-    if (!selectedRoleId) return alert('Select a role.');
-    if (!selectedUnitId) return alert('Select a branch / unit.');
-    if (parsedData.length === 0) return alert('Upload a file with at least one valid row.');
+    if (parsedData.length === 0) return alert(bi.alertNoRows);
 
     setUploadStatus('uploading');
-    setLogs([{ msg: `Starting import of ${parsedData.length} user(s)…`, isError: false }]);
+    setLogs([{ msg: interpolate(bi.logStarting, { count: parsedData.length }), isError: false }]);
 
     let successCount = 0;
 
@@ -182,8 +190,21 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
         const phone_number = normalizePhoneNumber(user.phone);
 
         if (!phone_number || phone_number.length !== 10) {
-          throw new Error(`Invalid phone for ${user.name} (need 10 digits).`);
+          throw new Error(interpolate(bi.invalidPhone, { name: user.name }));
         }
+
+        const targetRoleName = (user.role || 'Learner').trim().toLowerCase();
+        // Match against all roles (including filtered ones for safety, or just rolesData)
+        const matchedRole = rolesData.find(r => r.name.toLowerCase() === targetRoleName) 
+                         || rolesData.find(r => r.name.toLowerCase().includes('learner'))
+                         || rolesData[0];
+
+        if (!matchedRole) {
+          throw new Error(interpolate(bi.logFailed, { name: user.name, msg: 'Role not found in system' }));
+        }
+
+        const isDeptAdminRole = matchedRole.name.toLowerCase().includes('admin');
+        const userType = isDeptAdminRole ? 'DEPT_ADMIN' : 'STAFF';
 
         await createUser({
           first_name,
@@ -191,15 +212,16 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
           email: user.email,
           password: user.password,
           phone_number,
-          role_id: selectedRoleId,
-          unit_id: selectedUnitId,
+          role_id: matchedRole.id,
+          unit_id: selectedUnitId || null,
+          dept_id: selectedDeptId || null,
           org_id: orgId,
-          user_type: 'STAFF',
+          user_type: userType,
           status: 'ACTIVE',
         }).unwrap();
 
         successCount++;
-        setLogs((prev) => [...prev, { msg: `OK: ${user.name} (${user.email})`, isError: false }]);
+        setLogs((prev) => [...prev, { msg: interpolate(bi.logOk, { name: user.name, email: user.email }), isError: false }]);
       } catch (error: unknown) {
         const err = error as { data?: { message?: unknown }; message?: unknown };
         const msg =
@@ -207,15 +229,21 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
             ? err.data.message
             : typeof err.message === 'string'
               ? err.message
-              : 'Request failed';
-        setLogs((prev) => [...prev, { msg: `Failed: ${user.name} — ${msg}`, isError: true }]);
+              : bi.requestFailed;
+        setLogs((prev) => [
+          ...prev,
+          { msg: interpolate(bi.logFailed, { name: user.name, msg: String(msg) }), isError: true },
+        ]);
       }
     }
 
     setUploadStatus('success');
     setLogs((prev) => [
       ...prev,
-      { msg: `Done. ${successCount} of ${parsedData.length} imported.`, isError: false },
+      {
+        msg: interpolate(bi.logDone, { success: successCount, total: parsedData.length }),
+        isError: false,
+      },
     ]);
   };
 
@@ -231,8 +259,8 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
               <FileSpreadsheet size={20} strokeWidth={2} aria-hidden />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Bulk import</p>
-              <h2 className="text-lg font-bold text-gray-900 sm:text-xl">Import users from Excel</h2>
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">{bi.kicker}</p>
+              <h2 className="text-lg font-bold text-gray-900 sm:text-xl">{bi.title}</h2>
             </div>
           </div>
           <button
@@ -241,7 +269,7 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-medium text-emerald-900 shadow-sm transition hover:bg-emerald-50"
           >
             <Download size={18} className="shrink-0" aria-hidden />
-            Download sample template
+            {bi.downloadTemplate}
           </button>
         </div>
       </div>
@@ -250,44 +278,32 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
         <div className="grid divide-y divide-gray-100 md:grid-cols-12 md:divide-x md:divide-y-0 md:items-start">
           <div className="space-y-4 p-4 sm:p-5 md:col-span-5">
             <p className="text-xs text-gray-500">
-              Required columns: <span className="font-medium text-gray-700">name</span>,{' '}
-              <span className="font-medium text-gray-700">email</span>,{' '}
-              <span className="font-medium text-gray-700">phone</span> (10 digits). Optional:{' '}
-              <span className="font-medium text-gray-700">password</span> (default Welcome123!).
+              {interpolate(bi.columnsHint, { defaultPwd: DEFAULT_IMPORT_PASSWORD })}
             </p>
 
+
+
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-600">Branch / unit</label>
-              {loadingTree ? (
+              <label className="text-xs font-medium text-gray-600">{bi.department || "Department"}</label>
+              {loadingDepts ? (
                 <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
               ) : (
-                <select value={selectedUnitId} onChange={(e) => setSelectedUnitId(e.target.value)} className={inputClass}>
-                  <option value="">Select branch…</option>
-                  {flatUnits.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
+                <select 
+                  value={selectedDeptId} 
+                  onChange={(e) => setSelectedDeptId(e.target.value)} 
+                  className={`${inputClass} ${isDeptAdmin ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  disabled={isDeptAdmin}
+                >
+                  {!isDeptAdmin && <option value="">{bi.selectDepartment || "Select department…"}</option>}
+                  {filteredDepartments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
                     </option>
                   ))}
                 </select>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-600">Role</label>
-              {loadingRoles ? (
-                <div className="h-10 animate-pulse rounded-xl bg-gray-100" />
-              ) : (
-                <select value={selectedRoleId} onChange={(e) => setSelectedRoleId(e.target.value)} className={inputClass}>
-                  <option value="">Select role…</option>
-                  {roles.map((r: RoleItem) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                      {r.org_id ? ' (custom)' : ' (system)'}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
           </div>
 
           <div className="flex flex-col p-4 sm:p-5 md:col-span-7">
@@ -339,10 +355,8 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
                     onChange={handleFileInputChange}
                   />
                   <UploadCloud size={26} className="mb-2 shrink-0 text-gray-400" aria-hidden />
-                  <span className="text-center text-sm font-semibold text-gray-800">
-                    Choose file or drop spreadsheet
-                  </span>
-                  <span className="mt-0.5 text-center text-xs text-gray-500">.xlsx, .xls, or .csv</span>
+                  <span className="text-center text-sm font-semibold text-gray-800">{bi.dropzoneTitle}</span>
+                  <span className="mt-0.5 text-center text-xs text-gray-500">{bi.dropzoneTypes}</span>
                 </div>
               </div>
             )}
@@ -350,7 +364,7 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
             {uploadStatus === 'checking' && (
               <div className="mx-auto flex w-full max-w-md flex-col items-center justify-center gap-2 py-8">
                 <Loader2 size={28} className="animate-spin text-emerald-600" aria-hidden />
-                <p className="text-sm font-medium text-gray-600">Reading file…</p>
+                <p className="text-sm font-medium text-gray-600">{bi.readingFile}</p>
               </div>
             )}
 
@@ -361,29 +375,24 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
                     <Check size={20} strokeWidth={2.5} aria-hidden />
                   </div>
                   <p className="text-sm font-semibold text-emerald-950">
-                    {parsedData.length} row{parsedData.length === 1 ? '' : 's'} ready
+                    {parsedData.length === 1
+                      ? bi.rowsReadySingular
+                      : interpolate(bi.rowsReadyPlural, { count: parsedData.length })}
                   </p>
                   <button
                     type="button"
                     onClick={executeBulkImport}
-                    disabled={!selectedRoleId || !selectedUnitId}
                     className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Import users
+                    {bi.importUsers}
                   </button>
-                  {(!selectedRoleId || !selectedUnitId) && (
-                    <p className="mt-2 flex items-center justify-center gap-1 text-xs text-rose-600">
-                      <AlertCircle size={14} aria-hidden />
-                      Choose branch and role first.
-                    </p>
-                  )}
                 </div>
                 <button
                   type="button"
                   onClick={() => setParsedData([])}
                   className="text-center text-xs font-medium text-gray-500 hover:text-gray-800"
                 >
-                  Clear file
+                  {bi.clearFile}
                 </button>
               </div>
             )}
@@ -391,7 +400,7 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
             {(uploadStatus === 'uploading' || uploadStatus === 'success') && (
               <div className="mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between border-b border-gray-200 bg-white px-3 py-2">
-                  <span className="text-xs font-medium text-gray-600">Import log</span>
+                  <span className="text-xs font-medium text-gray-600">{bi.importLog}</span>
                   {uploadStatus === 'uploading' && <Loader2 size={16} className="animate-spin text-emerald-600" />}
                 </div>
                 <div className="max-h-48 overflow-y-auto p-3 font-mono text-[11px] leading-relaxed sm:max-h-56">
@@ -413,7 +422,7 @@ export default function BulkUserImport({ currentUser }: { currentUser: User }) {
                       }}
                       className="text-xs font-medium text-emerald-700 hover:text-emerald-900"
                     >
-                      Import another file
+                      {bi.importAnother}
                     </button>
                   </div>
                 )}

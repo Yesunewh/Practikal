@@ -14,10 +14,13 @@ import {
   VideoCheckContent,
   PolicyAttestationContent,
   StepCompleteDetail,
+  VerdictMessageChannel,
 } from '../types';
 import { RootState, AppDispatch } from '../store';
 import { logActivity } from '../store/slices/progressSlice';
 import GmailMockMessage from './GmailMockMessage';
+import WhatsAppMockMessage from './WhatsAppMockMessage';
+import TelegramMockMessage from './TelegramMockMessage';
 import {
   CheckCircle2,
   XCircle,
@@ -33,6 +36,13 @@ import {
   AlertTriangle,
   FileText,
 } from 'lucide-react';
+
+function normalizeVerdictChannel(raw: unknown): VerdictMessageChannel {
+  if (raw == null || raw === '') return 'gmail';
+  const s = String(raw).trim().toLowerCase();
+  if (s === 'whatsapp' || s === 'telegram') return s;
+  return 'gmail';
+}
 
 function videoEmbedUrl(url: string): string {
   try {
@@ -54,9 +64,18 @@ interface ChallengeStepProps {
   step: ChallengeStepType;
   onComplete: (detail: StepCompleteDetail) => void;
   isLast: boolean;
+  /** Full-width mint learner UI (centered title, 2-col cards, pill submit). */
+  surface?: 'default' | 'challengeMint';
 }
 
-export default function ChallengeStep({ step, onComplete, isLast }: ChallengeStepProps) {
+export default function ChallengeStep({
+  step,
+  onComplete,
+  isLast,
+  surface = 'default',
+}: ChallengeStepProps) {
+  if (!step) return null;
+
   const dispatch = useDispatch<AppDispatch>();
   const user = useSelector((state: RootState) => state.auth.user);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -307,9 +326,19 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
       case 'information': {
         const content = step.content as InformationContent;
         return (
-          <div className="space-y-4">
-            <h3 className="text-xl font-semibold">{content.title}</h3>
-            <p className="text-neutral-600">{content.description}</p>
+          <div className={surface === 'challengeMint' ? 'space-y-4 text-center' : 'space-y-4'}>
+            <h3
+              className={
+                surface === 'challengeMint'
+                  ? 'text-2xl font-semibold tracking-tight text-emerald-950'
+                  : 'text-xl font-semibold'
+              }
+            >
+              {content.title}
+            </h3>
+            <p className={surface === 'challengeMint' ? 'mx-auto max-w-xl text-neutral-700' : 'text-neutral-600'}>
+              {content.description}
+            </p>
             {content.image && (
               <img src={content.image} alt={content.title} className="rounded-lg w-full max-w-2xl mx-auto" />
             )}
@@ -321,6 +350,7 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
         const content = step.content as QuestionContent;
         const qKind = content.questionKind ?? 'multiple_choice';
         const ctx = content.verdictContext ?? {};
+        const messageChannel = normalizeVerdictChannel(ctx.channel);
 
         const optionTile = (option: (typeof content.options)[0], compact?: boolean) => (
           <div
@@ -354,14 +384,140 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
           </div>
         );
 
+        const mintChoiceButton = (option: (typeof content.options)[0], multi: boolean) => {
+          const selected = selectedOptions.includes(option.id);
+          return (
+            <button
+              key={option.id}
+              type="button"
+              disabled={isAnswered}
+              onClick={() => handleOptionSelect(option.id)}
+              className={`flex min-h-[4.5rem] w-full items-start gap-3 rounded-2xl border-2 bg-white p-4 text-left shadow-sm transition-all tap-highlight sm:min-h-[5rem] sm:p-5 ${
+                selected ? 'border-emerald-500 ring-2 ring-emerald-500/25' : 'border-emerald-100 hover:border-emerald-300'
+              } ${isAnswered ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                  multi
+                    ? selected
+                      ? 'border-emerald-600 bg-emerald-600'
+                      : 'border-neutral-300 bg-white'
+                    : selected
+                      ? 'border-emerald-600 bg-white'
+                      : 'border-neutral-300 bg-white'
+                }`}
+                aria-hidden
+              >
+                {multi ? (
+                  selected && <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                ) : (
+                  selected && <span className="block h-2.5 w-2.5 rounded-full bg-emerald-600" />
+                )}
+              </span>
+              <span className="flex-1 text-sm font-medium leading-snug text-neutral-900 sm:text-base">
+                {option.text}
+              </span>
+              {isAnswered &&
+                (option.isCorrect ? (
+                  <CheckCircle2 className="shrink-0 text-emerald-600" size={22} aria-hidden />
+                ) : (
+                  selected && <XCircle className="shrink-0 text-red-500" size={22} aria-hidden />
+                ))}
+            </button>
+          );
+        };
+
+        /** Mint multiple-choice: list + letter badges (distinct from 2-up true/false tiles). */
+        const mintMcqListOption = (option: (typeof content.options)[0], index: number, multi: boolean) => {
+          const selected = selectedOptions.includes(option.id);
+          const badge = multi ? String(index + 1) : String.fromCharCode(65 + index);
+          return (
+            <button
+              key={option.id}
+              type="button"
+              disabled={isAnswered}
+              onClick={() => handleOptionSelect(option.id)}
+              className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-sm transition-all tap-highlight sm:gap-4 sm:px-4 sm:py-3.5 ${
+                selected
+                  ? 'border-emerald-600 bg-emerald-50/95 ring-2 ring-emerald-500/20'
+                  : 'border-emerald-200/70 bg-white/90 hover:border-emerald-400 hover:bg-white'
+              } ${isAnswered ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold tabular-nums ring-1 transition-colors sm:h-10 sm:w-10 ${
+                  selected
+                    ? 'bg-emerald-600 text-white ring-emerald-700/35'
+                    : 'bg-emerald-100/90 text-emerald-900 ring-emerald-200/80'
+                }`}
+                aria-hidden
+              >
+                {badge}
+              </span>
+              <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-neutral-900 sm:text-base">
+                {option.text}
+              </span>
+              {!multi && (
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                    selected ? 'border-emerald-600 bg-white' : 'border-neutral-300 bg-white'
+                  }`}
+                  aria-hidden
+                >
+                  {selected && <span className="block h-2 w-2 rounded-full bg-emerald-600" />}
+                </span>
+              )}
+              {multi && (
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+                    selected ? 'border-emerald-600 bg-emerald-600' : 'border-neutral-300 bg-white'
+                  }`}
+                  aria-hidden
+                >
+                  {selected && <CheckCircle2 className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
+                </span>
+              )}
+              {isAnswered &&
+                (option.isCorrect ? (
+                  <CheckCircle2 className="shrink-0 text-emerald-600" size={22} aria-hidden />
+                ) : (
+                  selected && <XCircle className="shrink-0 text-red-500" size={22} aria-hidden />
+                ))}
+            </button>
+          );
+        };
+
         const verdictCard = (
           <div className="flex min-h-[min(240px,45dvh)] min-w-0 w-full max-w-full flex-1 flex-col overflow-hidden max-h-[min(62dvh,520px)] lg:max-h-[min(560px,72dvh)] lg:min-h-0">
-            <GmailMockMessage
-              clientBrand={ctx.clientBrand}
-              fromLine={ctx.fromLine}
-              subjectLine={ctx.subjectLine}
-              body={content.scenarioBody || ''}
-            />
+            {messageChannel === 'whatsapp' ? (
+              <WhatsAppMockMessage
+                fromLine={ctx.fromLine}
+                subjectLine={ctx.subjectLine}
+                body={content.scenarioBody || ''}
+              />
+            ) : messageChannel === 'telegram' ? (
+              <TelegramMockMessage
+                fromLine={ctx.fromLine}
+                subjectLine={ctx.subjectLine}
+                body={content.scenarioBody || ''}
+                showOwnerBadge={ctx.telegramShowOwnerBadge === true}
+                replyQuote={
+                  ctx.telegramQuoteAuthor?.trim() && ctx.telegramQuotePreview?.trim()
+                    ? {
+                        author: ctx.telegramQuoteAuthor.trim(),
+                        preview: ctx.telegramQuotePreview.trim(),
+                      }
+                    : undefined
+                }
+              />
+            ) : (
+              <GmailMockMessage
+                clientBrand={ctx.clientBrand}
+                fromLine={ctx.fromLine}
+                subjectLine={ctx.subjectLine}
+                body={content.scenarioBody || ''}
+                institutionFooter={ctx.institutionFooter === true}
+              />
+            )}
           </div>
         );
 
@@ -387,37 +543,37 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
               onClick={() => handleOptionSelect(option.id)}
               aria-pressed={selected}
               aria-label={option.text}
-              className={`flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 font-semibold transition-all duration-150 tap-highlight focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-default ${
+              className={`inline-flex w-full max-w-[10.5rem] flex-col items-center justify-center gap-1.5 rounded-xl border-2 font-semibold transition-all duration-150 tap-highlight focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-default ${
                 compact
-                  ? 'min-h-[5.75rem] px-2 py-3 text-sm sm:px-3'
-                  : 'h-full min-h-[11rem] flex-1 px-3 py-4 text-base sm:px-4'
+                  ? 'px-2.5 py-2.5 text-xs sm:max-w-[11rem] sm:px-3 sm:py-3 sm:text-sm'
+                  : 'px-3 py-3 text-sm shadow-sm'
               } ${selected ? sel : idle} ${isAnswered && !selected ? 'opacity-50' : ''} ${
                 isLeft ? 'focus-visible:ring-amber-500' : 'focus-visible:ring-emerald-500'
               }`}
             >
               {isLeft ? (
                 <ShieldAlert
-                  className={`shrink-0 ${compact ? 'h-6 w-6' : 'h-8 w-8'}`}
+                  className={`shrink-0 ${compact ? 'h-5 w-5 sm:h-6 sm:w-6' : 'h-6 w-6 sm:h-7 sm:w-7'}`}
                   strokeWidth={1.75}
                   aria-hidden
                 />
               ) : (
                 <ShieldCheck
-                  className={`shrink-0 ${compact ? 'h-6 w-6' : 'h-8 w-8'}`}
+                  className={`shrink-0 ${compact ? 'h-5 w-5 sm:h-6 sm:w-6' : 'h-6 w-6 sm:h-7 sm:w-7'}`}
                   strokeWidth={1.75}
                   aria-hidden
                 />
               )}
-              <span className="leading-snug">{option.text}</span>
+              <span className="max-w-full text-center leading-snug [overflow-wrap:anywhere]">{option.text}</span>
               {isAnswered &&
                 (option.isCorrect ? (
                   <CheckCircle2
                     className={selected ? 'text-white' : isLeft ? 'text-amber-700' : 'text-emerald-700'}
-                    size={22}
+                    size={compact ? 18 : 20}
                     aria-hidden
                   />
                 ) : (
-                  selected && <XCircle className="text-white" size={22} aria-hidden />
+                  selected && <XCircle className="text-white" size={compact ? 18 : 20} aria-hidden />
                 ))}
             </button>
           );
@@ -427,7 +583,7 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
           const [left, right] = content.options;
           return (
             <div className="w-full space-y-4 px-0 sm:space-y-5 sm:px-0">
-              <h2 className="mx-auto max-w-5xl text-center font-serif text-xl font-semibold leading-tight tracking-tight text-emerald-900 sm:text-2xl md:text-3xl 2xl:max-w-6xl">
+              <h2 className="mx-auto max-h-[min(42dvh,16rem)] max-w-5xl overflow-y-auto text-center font-serif text-xl font-semibold leading-tight tracking-tight text-emerald-900 [overflow-wrap:anywhere] hyphens-auto sm:max-h-[min(38dvh,18rem)] sm:text-2xl md:text-3xl 2xl:max-w-6xl">
                 {content.question}
               </h2>
 
@@ -438,25 +594,37 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
                   <kbd className="rounded border border-neutral-200 bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700">→</kbd>{' '}
                   or tap —{' '}
                 </span>
-                <span className="sm:hidden">Tap a choice — </span>
-                left: first option · right: second option
+                <span className="sm:hidden">Tap — </span>
+                <span className="text-neutral-600">
+                  <span className="font-medium text-neutral-800">Left:</span>{' '}
+                  <span className="break-words" title={left.text}>
+                    {left.text}
+                  </span>
+                  <span className="mx-1 text-neutral-400" aria-hidden>
+                    ·
+                  </span>
+                  <span className="font-medium text-neutral-800">Right:</span>{' '}
+                  <span className="break-words" title={right.text}>
+                    {right.text}
+                  </span>
+                </span>
               </p>
 
-              <div className="mx-auto hidden w-full max-w-6xl flex-row items-stretch gap-3 lg:flex 2xl:max-w-[min(96rem,calc(100vw-4rem))] 2xl:gap-5">
-                <div className="flex w-[clamp(8.5rem,14vw,14rem)] shrink-0 self-stretch flex-col">
+              <div className="mx-auto hidden w-full max-w-6xl flex-row items-center justify-center gap-3 lg:flex 2xl:max-w-[min(96rem,calc(100vw-4rem))] 2xl:gap-4">
+                <div className="flex shrink-0 flex-col items-center justify-center self-center">
                   {verdictBinaryButton(left, 'left', false)}
                 </div>
                 <div className="min-h-0 min-w-0 flex-1 basis-0">{verdictCard}</div>
-                <div className="flex w-[clamp(8.5rem,14vw,14rem)] shrink-0 self-stretch flex-col">
+                <div className="flex shrink-0 flex-col items-center justify-center self-center">
                   {verdictBinaryButton(right, 'right', false)}
                 </div>
               </div>
 
-              <div className="mx-auto w-full max-w-full space-y-3 sm:max-w-3xl md:max-w-5xl lg:hidden">
+              <div className="mx-auto flex w-full max-w-full flex-col items-center space-y-3 sm:max-w-3xl md:max-w-5xl lg:hidden">
                 {verdictCard}
-                <div className="flex flex-row gap-2 min-[380px]:gap-3">
-                  <div className="min-w-0 flex-1">{verdictBinaryButton(left, 'left', true)}</div>
-                  <div className="min-w-0 flex-1">{verdictBinaryButton(right, 'right', true)}</div>
+                <div className="flex w-full flex-row items-center justify-center gap-3 px-2 sm:gap-4">
+                  {verdictBinaryButton(left, 'left', true)}
+                  {verdictBinaryButton(right, 'right', true)}
                 </div>
               </div>
             </div>
@@ -465,10 +633,67 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
 
         if (qKind === 'true_false' && content.options.length === 2) {
           return (
-            <div className="space-y-6 max-w-2xl mx-auto">
-              <h3 className="text-xl font-semibold text-center text-neutral-900">{content.question}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {content.options.map((option) => optionTile(option, false))}
+            <div
+              className={
+                surface === 'challengeMint'
+                  ? 'mx-auto max-w-3xl space-y-8'
+                  : 'mx-auto max-w-2xl space-y-6'
+              }
+            >
+              <h3
+                className={
+                  surface === 'challengeMint'
+                    ? 'text-balance text-center font-serif text-2xl font-semibold leading-snug tracking-tight text-emerald-950 sm:text-3xl'
+                    : 'text-center text-xl font-semibold text-neutral-900'
+                }
+              >
+                {content.question}
+              </h3>
+              <div
+                className={
+                  surface === 'challengeMint'
+                    ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4'
+                    : 'grid grid-cols-1 gap-4 sm:grid-cols-2'
+                }
+              >
+                {surface === 'challengeMint'
+                  ? content.options.map((option) => mintChoiceButton(option, false))
+                  : content.options.map((option) => optionTile(option, false))}
+              </div>
+            </div>
+          );
+        }
+
+        if (surface === 'challengeMint') {
+          const multi = !!content.multipleAnswers;
+          const isMcq = qKind === 'multiple_choice' || qKind == null;
+          if (isMcq) {
+            return (
+              <div className="mx-auto max-w-3xl space-y-5 sm:space-y-6">
+                <div className="rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-indigo-50/50 px-5 py-5 shadow-sm sm:px-6 sm:py-6">
+                  <p className="border-l-[5px] border-indigo-600 pl-4 text-left font-serif text-xl font-medium leading-relaxed text-slate-900 sm:pl-5 sm:text-2xl sm:leading-relaxed md:text-[1.75rem] md:leading-snug lg:text-[1.875rem]">
+                    {content.question}
+                  </p>
+                </div>
+                {multi && (
+                  <p className="text-left text-sm font-medium text-emerald-900/80">Select all that apply</p>
+                )}
+                <div className="flex flex-col gap-2.5 sm:gap-3">
+                  {content.options.map((option, idx) => mintMcqListOption(option, idx, multi))}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="mx-auto max-w-3xl space-y-8">
+              <h2 className="text-balance text-center font-serif text-2xl font-semibold leading-snug tracking-tight text-emerald-950 sm:text-3xl md:text-[2rem]">
+                {content.question}
+              </h2>
+              {multi && (
+                <p className="text-center text-sm font-medium text-emerald-900/75">Select all that apply</p>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                {content.options.map((option) => mintChoiceButton(option, multi))}
               </div>
             </div>
           );
@@ -877,15 +1102,15 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
                       {selected.body}
                     </div>
                     {!isAnswered && (
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         <button
                           type="button"
                           onClick={() =>
                             setPhishingClassifications(prev => ({ ...prev, [selected.id]: 'phish' }))
                           }
-                          className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                          className={`flex min-h-[3.25rem] w-full items-center justify-center rounded-lg px-2 py-3 text-center text-sm font-semibold leading-snug transition-colors sm:min-h-[3.5rem] sm:px-3 ${
                             phishingClassifications[selected.id] === 'phish'
-                              ? 'bg-red-600 text-white'
+                              ? 'bg-red-600 text-white shadow-sm'
                               : 'bg-red-100 text-red-800 hover:bg-red-200'
                           }`}
                         >
@@ -896,9 +1121,9 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
                           onClick={() =>
                             setPhishingClassifications(prev => ({ ...prev, [selected.id]: 'safe' }))
                           }
-                          className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                          className={`flex min-h-[3.25rem] w-full items-center justify-center rounded-lg px-2 py-3 text-center text-sm font-semibold leading-snug transition-colors sm:min-h-[3.5rem] sm:px-3 ${
                             phishingClassifications[selected.id] === 'safe'
-                              ? 'bg-emerald-600 text-white'
+                              ? 'bg-emerald-600 text-white shadow-sm'
                               : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                           }`}
                         >
@@ -949,7 +1174,11 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
   };
 
   return (
-    <div className="space-y-6 motion-safe:animate-content-shift">
+    <div
+      className={`motion-safe:animate-content-shift ${
+        surface === 'challengeMint' ? 'space-y-8' : 'space-y-6'
+      }`}
+    >
       {renderContent()}
       
       {showExplanation && step.explanation && (
@@ -971,19 +1200,38 @@ export default function ChallengeStep({ step, onComplete, isLast }: ChallengeSte
         </div>
       )}
 
-      <div className="flex justify-between items-center">
+      <div
+        className={
+          surface === 'challengeMint'
+            ? 'flex justify-center px-1 pt-2 sm:pt-4'
+            : 'flex items-center justify-between'
+        }
+      >
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={!canSubmit()}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors tap-highlight ${
-            !canSubmit()
-              ? 'bg-neutral-100 text-neutral-500 cursor-not-allowed motion-safe:hover:translate-y-0 motion-safe:active:scale-100'
-              : isAnswered
-              ? canContinue
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-neutral-100 text-neutral-500 cursor-not-allowed motion-safe:hover:translate-y-0 motion-safe:active:scale-100'
-              : 'bg-emerald-600 text-white hover:bg-emerald-700'
-          }`}
+          className={
+            surface === 'challengeMint'
+              ? `min-w-[min(100%,18rem)] rounded-full px-10 py-3.5 text-base font-semibold shadow-md transition-all tap-highlight sm:min-w-[20rem] sm:px-12 sm:py-4 sm:text-lg ${
+                  !canSubmit()
+                    ? 'cursor-not-allowed bg-emerald-200/45 text-emerald-800/50 shadow-none'
+                    : isAnswered
+                      ? canContinue
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99]'
+                        : 'cursor-not-allowed bg-emerald-200/45 text-emerald-800/50 shadow-none'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99]'
+                }`
+              : `rounded-lg px-6 py-2 font-medium transition-colors tap-highlight ${
+                  !canSubmit()
+                    ? 'cursor-not-allowed bg-neutral-100 text-neutral-500 motion-safe:hover:translate-y-0 motion-safe:active:scale-100'
+                    : isAnswered
+                      ? canContinue
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'cursor-not-allowed bg-neutral-100 text-neutral-500 motion-safe:hover:translate-y-0 motion-safe:active:scale-100'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`
+          }
         >
           {!isAnswered ? 'Submit Answer' : isLast ? 'Complete Challenge' : 'Continue'}
         </button>

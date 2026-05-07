@@ -2,10 +2,12 @@ import { ReactNode } from 'react';
 import { useSelector } from 'react-redux';
 import { Navigate, useLocation } from 'react-router-dom';
 import { RootState } from '../../store';
-import { UserRole } from '../../types';
+import { User, UserRole } from '../../types';
+import { canAccessAdminPortal, reconcileSessionUser } from '../../utils/authIdentity';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  /** When set (e.g. `['admin','superadmin']` for `/admin/*`), callers must authorize */
   allowedRoles?: UserRole[];
 }
 
@@ -17,7 +19,6 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="animate-spin text-emerald-600">
-          {/* Simple spinner */}
           <svg className="w-10 h-10" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -28,13 +29,17 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   }
 
   if (!user) {
-    // Redirect to login if not authenticated
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
+  const reconciledUser = reconcileSessionUser(user as User) ?? user;
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to home if user doesn't have required role
-    return <Navigate to="/" replace />;
+  if (allowedRoles?.length) {
+    /** Listed role wins; otherwise defer to tier + platform hints (fixes stale role while `SUPERADMIN`/`permissions` are correct). */
+    const listed = allowedRoles.includes(reconciledUser.role as UserRole);
+    const allowed = listed || canAccessAdminPortal(reconciledUser);
+    if (!allowed) {
+      return <Navigate to="/" replace />;
+    }
   }
 
   return <>{children}</>;

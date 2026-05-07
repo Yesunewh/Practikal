@@ -1,10 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { AlertCircle, Sparkles, Trophy } from 'lucide-react';
+import { AlertCircle, Sparkles, Trophy, Star, X } from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
+import { interpolate } from '../i18n/messages';
+import { useRateChallengeMutation } from '../store/apiSlice/practikalApi';
 
 export interface ChallengeCompletionScreenProps {
   passed: boolean;
   score: number;
+  challengeId?: string;
   challengeTitle: string;
   passThreshold: number;
   onExit: () => void;
@@ -18,45 +22,60 @@ function prefersReducedMotion(): boolean {
 function fireCelebrationConfetti() {
   const y = 0.58;
   confetti({
-    particleCount: 110,
-    spread: 76,
-    startVelocity: 42,
+    particleCount: 80,
+    spread: 60,
+    startVelocity: 35,
     origin: { x: 0.5, y },
-    ticks: 220,
-    gravity: 1.05,
-    scalar: 1,
+    ticks: 200,
+    gravity: 1,
+    scalar: 0.9,
   });
   window.setTimeout(() => {
     confetti({
-      particleCount: 55,
+      particleCount: 40,
       angle: 60,
-      spread: 48,
-      origin: { x: 0, y: y + 0.05 },
-      ticks: 180,
+      spread: 40,
+      origin: { x: 0, y: y + 0.1 },
+      ticks: 150,
     });
-  }, 180);
+  }, 150);
   window.setTimeout(() => {
     confetti({
-      particleCount: 55,
+      particleCount: 40,
       angle: 120,
-      spread: 48,
-      origin: { x: 1, y: y + 0.05 },
-      ticks: 180,
+      spread: 40,
+      origin: { x: 1, y: y + 0.1 },
+      ticks: 150,
     });
-  }, 320);
+  }, 300);
 }
 
-/**
- * Full-screen completion: winner treatment + confetti when passed; calmer layout when failed.
- */
 export default function ChallengeCompletionScreen({
   passed,
   score,
+  challengeId,
   challengeTitle,
   passThreshold,
   onExit,
 }: ChallengeCompletionScreenProps) {
+  const { messages } = useI18n();
+  const c = messages.completion;
   const firedRef = useRef(false);
+  const [rateChallenge] = useRateChallengeMutation();
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [hasRated, setHasRated] = useState(false);
+
+  const handleRate = async (value: number) => {
+    if (!challengeId || hasRated) return;
+    setRating(value);
+    try {
+      await rateChallenge({ id: challengeId, rating: value }).unwrap();
+      setHasRated(true);
+    } catch (err) {
+      console.error("Failed to rate challenge", err);
+    }
+  };
 
   useEffect(() => {
     if (!passed || firedRef.current || prefersReducedMotion()) return;
@@ -64,128 +83,137 @@ export default function ChallengeCompletionScreen({
     fireCelebrationConfetti();
   }, [passed]);
 
-  if (passed) {
-    const perfect = score >= 100;
-
-    return (
-      <div
-        className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-neutral-50 motion-safe:animate-fade-in"
-        style={{
-          paddingTop: 'max(0.25rem, env(safe-area-inset-top))',
-          paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))',
-        }}
-      >
-        <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-center px-3 py-1 sm:px-4 sm:py-2">
-          <div className="w-full rounded-2xl border border-neutral-200/90 bg-white px-3 py-3 text-center shadow-sm sm:px-5 sm:py-4 motion-safe:animate-celebration-card">
-            <div className="mb-2 flex justify-center sm:mb-3">
-              <div className="relative">
-                <Trophy
-                  className="h-14 w-14 text-amber-400 drop-shadow-sm motion-safe:animate-trophy-pop sm:h-[4.5rem] sm:w-[4.5rem]"
-                  strokeWidth={1.25}
-                  aria-hidden
-                />
-                <Sparkles
-                  className="absolute -right-0.5 -top-0.5 h-5 w-5 text-emerald-500 motion-safe:animate-pulse sm:h-6 sm:w-6"
-                  aria-hidden
-                />
-              </div>
-            </div>
-
-            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 sm:text-xs sm:tracking-[0.2em]">
-              Winner
-            </p>
-            <h2 className="font-serif text-2xl font-bold tracking-tight text-emerald-950 sm:text-3xl">You did it!</h2>
-            <p className="mt-1 line-clamp-2 text-xs leading-snug text-neutral-600 sm:mt-1.5 sm:text-sm">{challengeTitle}</p>
-
-            <div className="my-3 flex flex-col items-center gap-0.5 sm:my-4 sm:gap-1">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">Your score</span>
-              <div
-                className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 text-xl font-bold text-white shadow-md shadow-emerald-900/20 motion-safe:animate-score-pop sm:h-28 sm:w-28 sm:text-3xl"
-                aria-live="polite"
-              >
-                {score}%
-              </div>
-              {perfect && (
-                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold text-amber-900 sm:px-3 sm:py-1 sm:text-xs">
-                  Perfect score
-                </span>
-              )}
-            </div>
-
-            <p className="mb-2 text-[11px] leading-snug text-neutral-600 sm:mb-3 sm:text-sm">
-              Challenge completed — keep building your security skills.
-            </p>
-
-            <button
-              type="button"
-              onClick={onExit}
-              className="w-full rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 sm:py-2.5"
-            >
-              Back to Challenges
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  const perfect = score >= 100;
   const title = challengeTitle.trim();
 
   return (
     <div
-      className="flex h-dvh max-h-dvh min-h-0 flex-col overflow-hidden bg-neutral-50 motion-safe:animate-fade-in"
+      className="flex min-h-screen flex-col bg-gray-50 motion-safe:animate-fade-in"
       style={{
-        paddingTop: 'max(0.25rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))',
+        paddingTop: 'max(0.1rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(0.1rem, env(safe-area-inset-bottom))',
       }}
     >
-      <div className="mx-auto flex w-full min-h-0 max-w-lg flex-1 flex-col justify-center px-3 py-2 sm:max-w-xl sm:px-4 sm:py-3">
-        <div className="w-full rounded-2xl border border-rose-200/90 bg-white px-4 py-5 text-center shadow-md shadow-rose-950/5 ring-1 ring-rose-900/[0.04] sm:px-6 sm:py-6 motion-safe:animate-fade-in-up">
-          <div className="mb-3 flex justify-center">
-            <div
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 sm:h-16 sm:w-16"
-              aria-hidden
-            >
-              <AlertCircle className="h-8 w-8 text-rose-600 sm:h-9 sm:w-9" strokeWidth={1.75} />
-            </div>
-          </div>
-
-          <h2 className="mb-0.5 font-serif text-2xl font-bold tracking-tight text-rose-700 sm:mb-1 sm:text-3xl">
-            Challenge incomplete
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-start px-4 py-1 sm:py-1">
+        <div className="w-full rounded-2xl border border-gray-200/90 bg-white px-6 py-4 text-center shadow-lg shadow-gray-200/50 motion-safe:animate-celebration-card sm:px-10 sm:py-6">
+          {/* Header Section */}
+          <h2 className="mb-2 text-center font-serif text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+            {title || c.thisChallenge}
           </h2>
 
-          <div className="my-4 flex flex-col items-center gap-0.5 sm:my-5 sm:gap-1">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">Your score</span>
-            <div
-              className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-rose-700 text-xl font-bold text-white shadow-md shadow-rose-900/25 motion-safe:animate-score-pop sm:h-24 sm:w-24 sm:text-3xl"
-              aria-live="polite"
-            >
-              {score}%
+          <div className="flex items-center justify-center gap-4 text-left">
+            <div className="relative shrink-0">
+              {passed ? (
+                <>
+                  <Trophy
+                    className="h-12 w-12 text-amber-400 drop-shadow-sm motion-safe:animate-trophy-pop sm:h-16 sm:w-16"
+                    strokeWidth={1.25}
+                    aria-hidden
+                  />
+                  <Sparkles
+                    className="absolute -right-1 -top-1 h-5 w-5 text-emerald-500 motion-safe:animate-pulse sm:h-7 sm:w-7"
+                    aria-hidden
+                  />
+                </>
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 sm:h-16 sm:w-16">
+                  <AlertCircle className="h-7 w-7 text-rose-500 sm:h-10 sm:w-10" strokeWidth={1.5} />
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className={`text-lg font-bold sm:text-2xl ${passed ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {passed ? c.youDidIt : c.failedTitle}
+              </p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-neutral-200/90 bg-neutral-50 px-3 py-3 text-left text-sm leading-relaxed text-neutral-700 sm:px-4 sm:text-[15px]">
-            <p className="break-words">
-              You scored <span className="font-semibold text-rose-700">{score}%</span>. You need{' '}
-              <span className="font-semibold text-neutral-900">{passThreshold}%</span> to pass{' '}
-              {title ? (
-                <span className="font-medium text-neutral-800">{title}</span>
-              ) : (
-                <span className="font-medium text-neutral-800">this challenge</span>
-              )}
-              .
-            </p>
+          {/* Results Section */}
+          <div className="my-4 space-y-4">
+            <div className={`flex items-center justify-center gap-4 rounded-xl p-3 sm:p-4 ${passed ? 'bg-emerald-50/50' : 'bg-rose-50/50'}`}>
+              <span className="text-xs font-bold uppercase tracking-widest text-gray-400 sm:text-sm">
+                {c.yourScore}
+              </span>
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold text-white shadow-lg motion-safe:animate-score-pop sm:h-20 sm:w-20 sm:text-2xl ${passed ? 'bg-emerald-500 shadow-emerald-200' : 'bg-rose-500 shadow-rose-200'
+                    }`}
+                  aria-live="polite"
+                >
+                  {score}%
+                </div>
+                {perfect && passed && (
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold text-amber-900 sm:text-xs">
+                    {c.perfectScore}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="text-center px-2">
+              <p className="text-sm leading-relaxed text-gray-600 sm:text-base">
+                {passed
+                  ? c.passedBlurb
+                  : interpolate(c.needPass, {
+                    score,
+                    threshold: passThreshold,
+                    title: title || c.thisChallenge,
+                  })}
+              </p>
+            </div>
           </div>
 
-          <p className="mt-4 text-sm leading-snug text-neutral-600 sm:text-base">Try again when you&apos;re ready.</p>
+          {/* Rating Section */}
+          <div className="mb-4">
+            {challengeId && !hasRated && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs font-medium text-gray-400 text-center mb-1.5 mt-2">Rate this module</p>
+                <div className="flex items-center justify-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      onClick={() => handleRate(star)}
+                      className="transition-transform hover:scale-110 focus:outline-none"
+                    >
+                      <Star
+                        size={24}
+                        className={`transition-colors ${(hoverRating || rating) >= star
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'fill-gray-100 text-gray-200'
+                          }`}
+                        strokeWidth={1.5}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {hasRated && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="mt-4 text-xs font-bold text-emerald-600 text-center uppercase tracking-wider">
+                  Thanks for rating!
+                </p>
+              </div>
+            )}
+          </div>
 
-          <button
-            type="button"
-            onClick={onExit}
-            className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 sm:mt-6 sm:py-3"
-          >
-            Back to Challenges
-          </button>
+          {/* Action Area */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={onExit}
+              className="w-full rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+            >
+              {c.backToChallenges}
+            </button>
+            {!passed && (
+              <p className="text-xs font-medium text-gray-400">
+                {c.tryAgain}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

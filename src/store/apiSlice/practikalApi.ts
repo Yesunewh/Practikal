@@ -13,10 +13,20 @@ export type PendingApplicantRow = {
   createdAt?: string;
 };
 
+/** Row from GET /permissions (Phase 2: matrix_locked_for_editor for tenant admins). */
+export type AvailablePermissionRow = {
+  id: string;
+  name: string;
+  has_access?: boolean;
+  matrix_locked_for_editor?: boolean;
+  module?: string | null;
+  description?: string | null;
+};
+
 /** Dev: use `/api` + Vite proxy to backend. Prod: set VITE_API_BASE_URL (e.g. https://api.example.com/api). */
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-  (import.meta.env.DEV ? '/api' : 'http://localhost:5050/api');
+  'https://practicalbackend.paperless.et/api';
 
 export const practikalApi = createApi({
   reducerPath: 'practikalApi',
@@ -122,6 +132,14 @@ export const practikalApi = createApi({
       }),
       invalidatesTags: ['Unit'],
     }),
+    updateUnit: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/units/${id}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['Unit'],
+    }),
     getUnitTypes: builder.query({
       query: (orgId?: string) => orgId ? `/units/types?org_id=${orgId}` : '/units/types',
       providesTags: ['Unit'],
@@ -134,9 +152,17 @@ export const practikalApi = createApi({
       }),
       invalidatesTags: ['Unit'],
     }),
+    updateUnitType: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/units/types/${id}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['Unit'],
+    }),
 
     // Permissions
-    getAvailablePermissions: builder.query({
+    getAvailablePermissions: builder.query<AvailablePermissionRow[], string | undefined>({
       query: (orgId?: string) => orgId ? `/permissions?org_id=${orgId}` : '/permissions',
       providesTags: ['Permission'],
     }),
@@ -176,16 +202,40 @@ export const practikalApi = createApi({
       }),
       invalidatesTags: ['Role'],
     }),
+    updateRole: builder.mutation({
+      query: ({ id, ...body }: { id: string; name?: string; description?: string; permissionIds?: string[]; org_id?: string }) => ({
+        url: `/roles/${id}`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['Role'],
+    }),
+    updateProfile: builder.mutation({
+      query: (body: { firstName?: string; lastName?: string; email?: string; phoneNumber?: string }) => ({
+        url: '/users/updateInfo',
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: ['User'],
+    }),
+    changePassword: builder.mutation({
+      query: (body: { currentPassword?: string; newPassword?: string }) => ({
+        url: '/users/updatePassword',
+        method: 'PATCH',
+        body,
+      }),
+    }),
 
     // User Management
     getUsers: builder.query({
-      query: (arg?: string | { org_id?: string; dept_id?: string }) => {
+      query: (arg?: string | { org_id?: string; dept_id?: string; unit_id?: string }) => {
         const params = new URLSearchParams();
         if (typeof arg === 'string') {
           if (arg) params.set('org_id', arg);
         } else if (arg && typeof arg === 'object') {
           if (arg.org_id) params.set('org_id', arg.org_id);
           if (arg.dept_id) params.set('dept_id', arg.dept_id);
+          if (arg.unit_id) params.set('unit_id', arg.unit_id);
         }
         const qs = params.toString();
         return qs ? `/users?${qs}` : '/users';
@@ -255,7 +305,7 @@ export const practikalApi = createApi({
         userId: string;
         org_id?: string | null;
         dept_id?: string | null;
-        unit_id: string;
+        unit_id: string | null;
         role_id: string;
       }) => ({
         url: `/users/${userId}/approve-applicant`,
@@ -279,6 +329,7 @@ export const practikalApi = createApi({
         difficulty?: string;
         org_id?: string;
         dept_id?: string;
+        unit_id?: string;
         /** Admin exam bank: include inactive challenges + attempt counts */
         for_exam_bank?: boolean;
       }) => {
@@ -287,6 +338,7 @@ export const practikalApi = createApi({
         if (arg?.difficulty) params.set('difficulty', arg.difficulty);
         if (arg?.org_id) params.set('org_id', arg.org_id);
         if (arg?.dept_id) params.set('dept_id', arg.dept_id);
+        if (arg?.unit_id) params.set('unit_id', arg.unit_id);
         if (arg?.for_exam_bank) params.set('for_exam_bank', '1');
         const qs = params.toString();
         return `/gamification/challenges${qs ? `?${qs}` : ''}`;
@@ -360,15 +412,90 @@ export const practikalApi = createApi({
       query: () => '/gamification/achievements/me',
       providesTags: ['Gamification'],
     }),
+    getCategories: builder.query({
+      query: () => '/gamification/categories',
+      providesTags: ['Gamification'],
+    }),
+    createCategory: builder.mutation({
+      query: (body: Record<string, unknown>) => ({
+        url: '/gamification/categories',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Gamification'],
+    }),
+    updateCategory: builder.mutation({
+      query: ({ id, data }: { id: string; data: any }) => ({
+        url: `/gamification/categories/${id}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Gamification'],
+    }),
+    deleteCategory: builder.mutation({
+      query: (id: string) => ({
+        url: `/gamification/categories/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Gamification'],
+    }),
+    rateChallenge: builder.mutation({
+      query: ({ id, rating, review_text }: { id: string; rating: number; review_text?: string }) => ({
+        url: `/gamification/challenges/${id}/rate`,
+        method: 'POST',
+        body: { rating, review_text },
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Challenge', id },
+        'Challenge',
+        'Gamification'
+      ],
+    }),
     getGamificationLeaderboard: builder.query({
-      query: (arg?: { org_id?: string; dept_id?: string; limit?: number; scope?: string }) => {
+      query: (arg?: { org_id?: string; dept_id?: string; unit_id?: string; limit?: number; offset?: number; scope?: string }) => {
         const params = new URLSearchParams();
         if (arg?.org_id) params.set('org_id', arg.org_id);
         if (arg?.dept_id) params.set('dept_id', arg.dept_id);
+        if (arg?.unit_id) params.set('unit_id', arg.unit_id);
         if (arg?.limit != null) params.set('limit', String(arg.limit));
+        if (arg?.offset != null) params.set('offset', String(arg.offset));
         if (arg?.scope) params.set('scope', arg.scope);
         const qs = params.toString();
         return `/gamification/leaderboard${qs ? `?${qs}` : ''}`;
+      },
+      providesTags: ['Gamification'],
+    }),
+    getGamificationAdminTrainingSummary: builder.query<
+      {
+        success: boolean;
+        summary: {
+          scopeLabel: string;
+          orgId: string | null;
+          deptId: string | null;
+          unitId: string | null;
+          userCount: number;
+          activeUserCount: number;
+          categories: { category: string; usersWithPass: number; passAttempts: number }[];
+          topChallengers: {
+            rank: number;
+            userId: string;
+            name: string;
+            xp: number;
+            streak: number;
+            challengesCompleted: number;
+          }[];
+        };
+      },
+      Record<string, string> | undefined
+    >({
+      query: (arg) => {
+        const params = new URLSearchParams();
+        const o = arg ?? {};
+        if (o.org_id) params.set('org_id', o.org_id);
+        if (o.dept_id) params.set('dept_id', o.dept_id);
+        if (o.unit_id) params.set('unit_id', o.unit_id);
+        const qs = params.toString();
+        return `/gamification/training-summary${qs ? `?${qs}` : ''}`;
       },
       providesTags: ['Gamification'],
     }),
@@ -429,13 +556,16 @@ export const {
   useUpdateDepartmentMutation,
   useGetUnitTreeQuery,
   useCreateUnitMutation,
+  useUpdateUnitMutation,
   useGetUnitTypesQuery,
   useCreateUnitTypeMutation,
+  useUpdateUnitTypeMutation,
   useGetAvailablePermissionsQuery,
   useAllocatePermissionMutation,
   useBulkAllocatePermissionsMutation,
   useGetRolesQuery,
   useCreateRoleMutation,
+  useUpdateRoleMutation,
   useGetUsersQuery,
   useAdminCreateUserMutation,
   useAdminUpdateUserScopeMutation,
@@ -455,11 +585,17 @@ export const {
   useDeleteGamificationTrainingAssignmentMutation,
   useGetGamificationAchievementsMeQuery,
   useGetGamificationLeaderboardQuery,
+  useGetGamificationAdminTrainingSummaryQuery,
   useCreateGamificationChallengeMutation,
   useUpdateGamificationChallengeMutation,
   useDeleteGamificationChallengeMutation,
   useCreateLeaderboardSnapshotMutation,
   useGetLeaderboardSnapshotsQuery,
+  useGetCategoriesQuery,
+  useCreateCategoryMutation,
+  useUpdateCategoryMutation,
+  useDeleteCategoryMutation,
+  useRateChallengeMutation,
+  useUpdateProfileMutation,
+  useChangePasswordMutation,
 } = practikalApi;
-
-

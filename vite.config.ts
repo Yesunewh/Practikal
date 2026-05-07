@@ -3,20 +3,46 @@ import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  const env = loadEnv(mode, './', '');
   const apiPort = env.VITE_DEV_API_PORT || '5050';
 
   return {
     plugins: [react()],
-    optimizeDeps: {
-      exclude: ['lucide-react'],
+
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-redux': ['@reduxjs/toolkit', 'react-redux'],
+            'vendor-charts': ['recharts'],
+            'vendor-icons': ['lucide-react'],
+            'vendor-misc': ['react-hot-toast', 'canvas-confetti', 'xlsx'],
+          },
+        },
+      },
     },
     server: {
       proxy: {
-        // Dev: /api → backend. Match backend PORT (default 5050) or set VITE_DEV_API_PORT in frontend .env
         '/api': {
-          target: `http://localhost:${apiPort}`,
+          target: 'https://practicalbackend.paperless.et',
+           changeOrigin: true,
+          secure: false,
+          headers: {
+            'Host': 'practicalbackend.paperless.et',
+            'Connection': 'keep-alive',
+          },
+        },
+        '/uploads': {
+          target: 'https://practicalbackend.paperless.et',
           changeOrigin: true,
+          secure: false,
+          headers: {
+            'Host': 'practicalbackend.paperless.et',
+          },
         },
       },
     },

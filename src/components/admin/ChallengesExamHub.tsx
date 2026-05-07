@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { User } from '../../types';
 import { FileQuestion, FileText } from 'lucide-react';
+import { useI18n } from '../../i18n/I18nContext';
 import ExamBank from './ExamBank';
 import ChallengeManagement from './ChallengeManagement';
 
@@ -34,6 +35,8 @@ function accessFlags(user: User) {
 }
 
 export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProps) {
+  const { messages } = useI18n();
+  const h = messages.admin.challengesHub;
   const [searchParams, setSearchParams] = useSearchParams();
   const { canAuthor, canBank } = useMemo(() => accessFlags(currentUser), [currentUser]);
 
@@ -76,8 +79,8 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
   if (validTabs.length === 0) {
     return (
       <div className="rounded-xl border border-amber-100 bg-amber-50 p-6 text-amber-900">
-        <p className="font-semibold">No access</p>
-        <p className="mt-1 text-sm">You need catalog or challenge authoring permission to use this page.</p>
+        <p className="font-semibold">{h.noAccessTitle}</p>
+        <p className="mt-1 text-sm">{h.noAccessBody}</p>
       </div>
     );
   }
@@ -99,7 +102,7 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
               }`}
             >
               <FileQuestion size={18} className="shrink-0" aria-hidden />
-              Catalog
+              {h.tabCatalog}
             </button>
           )}
           {canAuthor && (
@@ -113,7 +116,7 @@ export default function ChallengesExamHub({ currentUser }: ChallengesExamHubProp
               }`}
             >
               <FileText size={18} className="shrink-0" aria-hidden />
-              Authoring
+              {h.tabAuthoring}
             </button>
           )}
         </div>

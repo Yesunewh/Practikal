@@ -30,7 +30,10 @@ export interface GamificationLeaderboardRow {
 export interface User {
   id: string;
   name: string;
+  first_name?: string;
+  last_name?: string;
   email: string;
+  phone_number?: string;
   organization: string;
   level: string;
   xp: number;
@@ -48,10 +51,18 @@ export interface User {
   role: UserRole;
   orgId?: string;
   deptId?: string;
-  /** Assigned organizational unit for UNIT_ADMIN (branch scope). */
+  /** Department name from DB (login); used in profile & shell subtitle. */
+  departmentName?: string | null;
+  /** Role label from assignments (Role.name). */
+  roleDisplayName?: string;
+  /** ISO date from `Users.createdAt` (login); member-since display. */
+  memberSinceAt?: string;
+  /** Assigned organizational unit for branch-scoped administrators. */
   unitId?: string;
-  user_type?: string;
+  /** Effective permission names from JWT; Super Admin may get full catalog at runtime without every name listed. */
   permissions?: string[];
+  /** From login / API: `SUPERADMIN`, `ORG_ADMIN`, etc. Sidebar and admin UIs use with `role`. */
+  user_type?: string;
   progress?: UserProgress;
   activityLog?: ActivityLogEntry[];
 }
@@ -67,7 +78,7 @@ export interface Challenge {
   reputationReward: number;
   duration: number;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
-  category: 'phishing' | 'malware' | 'password' | 'general' | 'social-engineering' | 'incident-response';
+  category: string;
   steps: ChallengeStep[];
   completed?: boolean;
   orgId?: string | null;
@@ -79,6 +90,10 @@ export interface Challenge {
   /** From gamification API: tier gating within category (beginner → intermediate → advanced). */
   progressionLocked?: boolean;
   progressionLockReason?: string | null;
+  /** NEW: Premium UI fields */
+  rating?: number;
+  releaseDate?: string;
+  createdAt?: string;
 }
 
 export interface ChallengeStep {
@@ -169,12 +184,23 @@ export interface Assignment {
 
 /** How a quiz-style step is authored and shown to learners */
 export type QuestionKind = 'multiple_choice' | 'true_false' | 'binary_verdict';
+export type VerdictMessageChannel = 'gmail' | 'whatsapp' | 'telegram';
 
 /** Optional chrome for `binary_verdict` (mock inbox / message) */
 export interface QuestionVerdictContext {
+  /** Defaults to `gmail` when omitted (existing challenges). */
+  channel?: VerdictMessageChannel;
   clientBrand?: string;
   fromLine?: string;
   subjectLine?: string;
+  /** Gmail mock: show crest + “MY UNIVERSITY” under body (template-style). */
+  institutionFooter?: boolean;
+  /** Telegram mobile chat: purple “Owner” next to sender name. */
+  telegramShowOwnerBadge?: boolean;
+  /** Telegram mobile chat: quoted reply author (with `telegramQuotePreview`). */
+  telegramQuoteAuthor?: string;
+  /** Telegram mobile chat: single-line quoted reply preview. */
+  telegramQuotePreview?: string;
 }
 
 export interface QuestionContent {
@@ -314,7 +340,7 @@ export interface UserProgress {
 }
 
 export interface CategoryProgress {
-  category: 'phishing' | 'malware' | 'password' | 'general' | 'social-engineering' | 'incident-response';
+  category: string;
   completed: number;
   total: number;
   averageScore: number;
@@ -388,6 +414,16 @@ export interface ChallengeAnswer {
   answer: string | string[];
   correct: boolean;
   timeSpent: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  display_name: string;
+  image_url: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /** Emitted when a challenge step is finished (submit + continue) */

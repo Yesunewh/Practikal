@@ -20,8 +20,10 @@ import {
   UserCheck,
   Smartphone,
   Mail,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../../i18n/I18nContext';
 import { downloadCsv, parseCsv, normalizeStaffImportPhone } from '../../utils/csv';
 import {
   useGetOrganizationsQuery,
@@ -34,6 +36,7 @@ import {
   useResetUserPasswordMutation,
   useDeactivateUserMutation,
   useActivateUserMutation,
+  useGetRolesQuery,
 } from '../../store/apiSlice/practikalApi';
 
 interface DepartmentManagementProps {
@@ -91,15 +94,25 @@ function pickCell(o: Record<string, string>, keys: string[]): string {
 
 export default function DepartmentManagement({ currentUser }: DepartmentManagementProps) {
   const navigate = useNavigate();
+  const { messages } = useI18n();
+  const dm = messages.admin.departmentMgmt;
   const isSuperAdmin = currentUser.role === 'superadmin';
-  const isOrgAdmin = currentUser.user_type === 'ORG_ADMIN';
-  const isDeptAdmin =
-    currentUser.user_type === 'DEPT_ADMIN' ||
+  const legacyDeptHeadConsole =
+    currentUser.role === 'admin' &&
+    !!currentUser.deptId &&
+    (currentUser.user_type == null || currentUser.user_type === '');
+  /** Stale sessions: admin console + org but JWT omits ORG_ADMIN (see App MANAGE_DEPARTMENTS). */
+  const isOrgAdmin =
+    currentUser.user_type === 'ORG_ADMIN' ||
     (currentUser.role === 'admin' &&
-      !!currentUser.deptId &&
-      (currentUser.user_type == null || currentUser.user_type === ''));
-  const canPlanStructure = isSuperAdmin || isOrgAdmin;
-  const hasAccess = isSuperAdmin || isOrgAdmin || isDeptAdmin;
+      !!currentUser.orgId &&
+      (currentUser.user_type == null || currentUser.user_type === '') &&
+      !legacyDeptHeadConsole);
+  const isUnitAdmin = currentUser.user_type === 'UNIT_ADMIN';
+  const isDeptAdmin =
+    currentUser.user_type === 'DEPT_ADMIN' || legacyDeptHeadConsole;
+  const canPlanStructure = isSuperAdmin || isOrgAdmin || isUnitAdmin;
+  const hasAccess = isSuperAdmin || isOrgAdmin || isDeptAdmin || isUnitAdmin;
 
   const { data: orgsData, isLoading: orgsLoading } = useGetOrganizationsQuery(undefined, {
     skip: !isSuperAdmin,
@@ -123,21 +136,28 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
     phone_number: '',
     email: '',
     password: 'Password123',
+    user_type: 'STAFF',
+    role_id: '',
   });
 
   const [assignDept, setAssignDept] = useState<DeptRow | null>(null);
   const [assignUserId, setAssignUserId] = useState('');
+  const [assignAsHead, setAssignAsHead] = useState(false);
 
   const [importDept, setImportDept] = useState<DeptRow | null>(null);
   const [importDefaultPassword, setImportDefaultPassword] = useState('Password123');
   const [importing, setImporting] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const [resetPwdUserId, setResetPwdUserId] = useState<string | null>(null);
+  const [deactivateUserId, setDeactivateUserId] = useState<string | null>(null);
+  const [makeHeadData, setMakeHeadData] = useState<{ userId: string; deptId: string } | null>(null);
+  const [removeUserId, setRemoveUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    if ((isOrgAdmin || isDeptAdmin) && currentUser.orgId) {
+    if ((isOrgAdmin || isDeptAdmin || isUnitAdmin) && currentUser.orgId) {
       setSelectedOrgId(currentUser.orgId);
     }
-  }, [isOrgAdmin, isDeptAdmin, currentUser.orgId]);
+  }, [isOrgAdmin, isDeptAdmin, isUnitAdmin, currentUser.orgId]);
 
   const { data: deptsData, isLoading: deptsLoading, isFetching: deptsFetching } = useGetDepartmentsQuery(
     selectedOrgId,
@@ -170,6 +190,22 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
   const [deactivateUser] = useDeactivateUserMutation();
   const [activateUser] = useActivateUserMutation();
   const [rosterActionUserId, setRosterActionUserId] = useState<string | null>(null);
+
+  const { data: rolesRes } = useGetRolesQuery(
+    { orgId: selectedOrgId, includeSystem: true },
+    { skip: !selectedOrgId }
+  );
+  const roles = useMemo(() => {
+    const raw = rolesRes?.data ?? [];
+    return raw.filter((r: any) => {
+      const n = r.name.toLowerCase();
+      // Exclude roles that are definitely not for department staff
+      if (n.includes('super') || n.includes('organization') || n.includes('tenant') || n.includes('branch') || n.includes('unit')) {
+        return false;
+      }
+      return true;
+    });
+  }, [rolesRes?.data]);
 
   const assignCandidates = useMemo(() => {
     if (!assignDept) return [];
@@ -345,7 +381,8 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
         phone_number: normalizeStaffImportPhone(staffForm.phone_number),
         email: staffForm.email.trim() || undefined,
         password: staffForm.password,
-        user_type: 'STAFF',
+        user_type: staffForm.user_type,
+        role_id: staffForm.role_id,
         org_id: selectedOrgId,
         dept_id: addStaffDept.id,
         status: 'ACTIVE',
@@ -357,6 +394,8 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
         phone_number: '',
         email: '',
         password: 'Password123',
+        user_type: 'STAFF',
+        role_id: '',
       });
       toast.success('Staff member created.');
     } catch (err: unknown) {
@@ -370,41 +409,60 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
       await patchScope({
         userId: assignUserId,
         dept_id: assignDept.id,
-        user_type: 'STAFF',
+        user_type: assignAsHead ? 'DEPT_ADMIN' : 'STAFF',
       }).unwrap();
       setAssignDept(null);
       setAssignUserId('');
-      toast.success('User assigned to department.');
+      setAssignAsHead(false);
+      toast.success(assignAsHead ? 'User assigned as department head.' : 'User assigned to department.');
     } catch (err: unknown) {
       toast.error(rtkErrorMessage(err) || 'Could not assign user to department.');
     }
   };
 
-  const setHead = async (userId: string, deptId: string) => {
-    if (!confirm('Make this user the department head? Any other DEPT_ADMIN in this department becomes STAFF.')) return;
+  const setHead = (userId: string, deptId: string) => {
+    setMakeHeadData({ userId, deptId });
+  };
+
+  const handleConfirmMakeHead = async () => {
+    if (!makeHeadData) return;
+    const { userId, deptId } = makeHeadData;
+    setRosterActionUserId(userId);
     try {
       await patchScope({
         userId,
         dept_id: deptId,
         user_type: 'DEPT_ADMIN',
       }).unwrap();
-      toast.success('Department head updated.');
+      toast.success(dm.toastHeadUpdated);
+      setMakeHeadData(null);
     } catch (err: unknown) {
-      toast.error(rtkErrorMessage(err) || 'Could not set department head.');
+      toast.error(rtkErrorMessage(err) || dm.toastHeadFailed);
+    } finally {
+      setRosterActionUserId(null);
     }
   };
 
-  const removeFromDept = async (userId: string) => {
-    if (!confirm('Remove this user from the department?')) return;
+  const removeFromDept = (userId: string) => {
+    setRemoveUserId(userId);
+  };
+
+  const handleConfirmRemoveFromDept = async () => {
+    if (!removeUserId) return;
+    const uid = removeUserId;
+    setRosterActionUserId(uid);
     try {
       await patchScope({
-        userId,
+        userId: uid,
         dept_id: null,
         user_type: 'STAFF',
       }).unwrap();
       toast.success('User removed from department.');
+      setRemoveUserId(null);
     } catch (err: unknown) {
       toast.error(rtkErrorMessage(err) || 'Could not update user.');
+    } finally {
+      setRosterActionUserId(null);
     }
   };
 
@@ -415,21 +473,21 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
     return false;
   };
 
-  const rosterResetPassword = async (userId: string) => {
-    if (
-      !confirm(
-        'Reset this person’s password to the platform default? They sign in with their phone number and the new temporary password.'
-      )
-    ) {
-      return;
-    }
-    setRosterActionUserId(userId);
+  const rosterResetPassword = (userId: string) => {
+    setResetPwdUserId(userId);
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!resetPwdUserId) return;
+    const uid = resetPwdUserId;
+    setRosterActionUserId(uid);
     try {
-      const res = await resetPassword(userId).unwrap();
+      const res = await resetPassword(uid).unwrap();
       const hint = (res as { login_hint?: string }).login_hint;
       toast.success(
         hint ? `${(res as { message?: string }).message ?? 'Password reset.'} ${hint}` : 'Password reset.'
       );
+      setResetPwdUserId(null);
     } catch (err: unknown) {
       toast.error(rtkErrorMessage(err) || 'Could not reset password.');
     } finally {
@@ -437,12 +495,18 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
     }
   };
 
-  const rosterDeactivate = async (userId: string) => {
-    if (!confirm('Deactivate this account? They will not be able to sign in until reactivated.')) return;
-    setRosterActionUserId(userId);
+  const rosterDeactivate = (userId: string) => {
+    setDeactivateUserId(userId);
+  };
+
+  const handleConfirmDeactivate = async () => {
+    if (!deactivateUserId) return;
+    const uid = deactivateUserId;
+    setRosterActionUserId(uid);
     try {
-      await deactivateUser(userId).unwrap();
+      await deactivateUser(uid).unwrap();
       toast.success('User deactivated.');
+      setDeactivateUserId(null);
     } catch (err: unknown) {
       toast.error(rtkErrorMessage(err) || 'Could not deactivate.');
     } finally {
@@ -485,23 +549,23 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
           <div>
             <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
               <Layers className="text-emerald-600" size={24} />
-              Departments & teams
+              {dm.title}
             </h2>
-            <p className="text-sm text-gray-600 mt-1 max-w-2xl">
-              Org admins define the horizontal structure (departments) and heads; department heads manage their roster,
-              export staff, and author challenges for their team. Superadmins can work across all tenants.
-            </p>
+
           </div>
         </div>
 
-        <div className="mt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
-          {isSuperAdmin ? (
-            orgsLoading ? (
-              <Loader2 className="animate-spin text-emerald-600" size={22} />
+        {isSuperAdmin && (
+          <div className="mt-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
+            {orgsLoading ? (
+              <div className="flex items-center gap-2 py-2">
+                <Loader2 className="animate-spin text-emerald-600" size={18} />
+                <span className="text-sm text-neutral-500">Loading organizations...</span>
+              </div>
             ) : (
               <select
-                className="w-full max-w-md px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="w-full max-w-md px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white shadow-sm transition-all"
                 value={selectedOrgId}
                 onChange={(e) => {
                   setSelectedOrgId(e.target.value);
@@ -515,11 +579,9 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
                   </option>
                 ))}
               </select>
-            )
-          ) : (
-            <p className="text-sm text-gray-900 font-medium py-2">{selectedOrgLabel}</p>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedOrgId && (
@@ -584,7 +646,6 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
                           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{d.status ?? 'ACTIVE'}</span>
                         </div>
                         {d.description && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{d.description}</p>}
-                        <p className="text-xs text-gray-400 mt-1 font-mono">ID: {d.id}</p>
                         <p className="text-xs text-gray-600 mt-1">
                           {staff.length} staff
                           {head && (
@@ -664,101 +725,146 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
                     </div>
                     {open && (
                       <div className="border-t border-gray-100 bg-gray-50/80 px-4 py-3">
+
                         {staff.length === 0 ? (
                           <p className="text-sm text-gray-500">No staff assigned yet.</p>
                         ) : (
-                          <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
-                            {staff.map((s) => (
-                              <li
-                                key={s.user_id}
-                                className="px-3 py-3 flex flex-col sm:flex-row sm:items-start gap-3 text-sm border-b border-gray-100 last:border-b-0"
-                              >
-                                <div className="flex-1 min-w-0 space-y-2">
-                                  <div className="font-medium text-gray-900">
-                                    {s.first_name} {s.last_name}
-                                    {s.user_type === 'DEPT_ADMIN' && (
-                                      <Crown size={14} className="inline ml-1 text-amber-600" aria-label="Department head" />
-                                    )}
-                                    <span className="ml-2 text-gray-500 text-xs font-normal">
-                                      {s.user_type.replace(/_/g, ' ')}
-                                    </span>
-                                    {s.status && s.status !== 'ACTIVE' && (
-                                      <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
-                                        {s.status}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <Smartphone size={14} className="text-gray-400 shrink-0" />
-                                      <span className="font-mono truncate">{s.phone_number || '—'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <Mail size={14} className="text-gray-400 shrink-0" />
-                                      <span className="break-all">{s.email?.trim() ? s.email : '—'}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap gap-1.5 sm:justify-end shrink-0">
-                                  {canRosterSecurityActions(s) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => void rosterResetPassword(s.user_id)}
-                                      disabled={patching || rosterActionUserId === s.user_id}
-                                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-amber-200 text-amber-900 bg-amber-50 hover:bg-amber-100 disabled:opacity-50"
-                                    >
-                                      {rosterActionUserId === s.user_id ? (
-                                        <Loader2 className="animate-spin" size={14} />
-                                      ) : (
-                                        <KeyRound size={14} />
-                                      )}
-                                      Reset password
-                                    </button>
-                                  )}
-                                  {canRosterSecurityActions(s) && s.status !== 'DEACTIVATED' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => void rosterDeactivate(s.user_id)}
-                                      disabled={patching || rosterActionUserId === s.user_id}
-                                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-rose-200 text-rose-800 bg-rose-50 hover:bg-rose-100 disabled:opacity-50"
-                                    >
-                                      <UserX size={14} />
-                                      Deactivate
-                                    </button>
-                                  )}
-                                  {canRosterSecurityActions(s) && s.status === 'DEACTIVATED' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => void rosterActivate(s.user_id)}
-                                      disabled={patching || rosterActionUserId === s.user_id}
-                                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-emerald-200 text-emerald-900 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50"
-                                    >
-                                      <UserCheck size={14} />
-                                      Activate
-                                    </button>
-                                  )}
-                                  {canPlanStructure && s.user_type !== 'DEPT_ADMIN' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setHead(s.user_id, d.id)}
-                                      disabled={patching}
-                                      className="text-xs px-2 py-1 rounded border border-amber-200 text-amber-800 hover:bg-amber-50 disabled:opacity-50"
-                                    >
-                                      Set head
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => removeFromDept(s.user_id)}
-                                    disabled={patching}
-                                    className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                          <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                            <table className="w-full text-left text-sm border-collapse">
+                              <thead className="bg-neutral-50/50 border-b border-neutral-100">
+                                <tr className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                                  <th className="px-6 py-4">User</th>
+                                  <th className="px-6 py-4">Role & Status</th>
+                                  <th className="px-6 py-4">Phone</th>
+                                  <th className="px-6 py-4">Email</th>
+                                  <th className="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-neutral-50">
+                                {staff.map((s) => {
+                                  const initials = `${s.first_name?.[0] || ''}${s.last_name?.[0] || ''}`.toUpperCase();
+                                  const isDeactivated = s.status === 'DEACTIVATED';
+                                  
+                                  return (
+                                    <tr key={s.user_id} className="group hover:bg-neutral-50/50 transition-colors">
+                                      <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black ring-2 ring-white shadow-sm ${
+                                            s.user_type === 'DEPT_ADMIN' 
+                                              ? 'bg-amber-100 text-amber-700' 
+                                              : 'bg-emerald-100 text-emerald-700'
+                                          }`}>
+                                            {initials}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className={`font-bold truncate ${isDeactivated ? 'text-neutral-400 line-through' : 'text-neutral-900'}`}>
+                                                {s.first_name} {s.last_name}
+                                              </span>
+                                              {s.user_type === 'DEPT_ADMIN' && (
+                                                <Crown size={14} className="text-amber-500 fill-amber-500 shrink-0" />
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1.5">
+                                          <span className="inline-flex w-fit items-center px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 text-[10px] font-black uppercase tracking-wider border border-neutral-200/50">
+                                            {s.user_type.replace(/_/g, ' ')}
+                                          </span>
+                                          {s.status && s.status !== 'ACTIVE' && (
+                                            <span className={`inline-flex w-fit items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${
+                                              isDeactivated ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-neutral-100 text-neutral-500'
+                                            }`}>
+                                              {s.status}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2 text-xs text-neutral-600">
+                                          <div className="p-1 rounded-md bg-neutral-100 text-neutral-400 group-hover:bg-white group-hover:shadow-sm transition-all">
+                                            <Smartphone size={12} />
+                                          </div>
+                                          <span className="font-mono">{s.phone_number || '—'}</span>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap">
+                                        {s.email?.trim() ? (
+                                          <div className="flex items-center gap-2 text-xs text-neutral-600">
+                                            <div className="p-1 rounded-md bg-neutral-100 text-neutral-400 group-hover:bg-white group-hover:shadow-sm transition-all">
+                                              <Mail size={12} />
+                                            </div>
+                                            <span className="truncate max-w-[180px]">{s.email}</span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-neutral-300">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                                          {canRosterSecurityActions(s) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => void rosterResetPassword(s.user_id)}
+                                              disabled={patching || rosterActionUserId === s.user_id}
+                                              className="inline-flex items-center justify-center h-8 w-8 rounded-xl border border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100 hover:shadow-sm disabled:opacity-50 transition-all"
+                                              title="Reset password"
+                                            >
+                                              {rosterActionUserId === s.user_id ? (
+                                                <Loader2 className="animate-spin" size={14} />
+                                              ) : (
+                                                <KeyRound size={14} />
+                                              )}
+                                            </button>
+                                          )}
+                                          
+                                          {canRosterSecurityActions(s) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => isDeactivated ? void rosterActivate(s.user_id) : void rosterDeactivate(s.user_id)}
+                                              disabled={patching || rosterActionUserId === s.user_id}
+                                              className={`inline-flex items-center justify-center h-8 w-8 rounded-xl border transition-all ${
+                                                isDeactivated 
+                                                  ? 'border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100' 
+                                                  : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'
+                                              }`}
+                                              title={isDeactivated ? 'Activate' : 'Deactivate'}
+                                            >
+                                              {isDeactivated ? <UserCheck size={14} /> : <UserX size={14} />}
+                                            </button>
+                                          )}
+ 
+                                          {canPlanStructure && s.user_type !== 'DEPT_ADMIN' && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setHead(s.user_id, d.id)}
+                                              disabled={patching}
+                                              className="inline-flex items-center justify-center h-8 w-8 rounded-xl border border-neutral-200 text-neutral-600 bg-white hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-sm"
+                                              title={dm.makeDeptAdmin}
+                                            >
+                                              <Crown size={14} className="text-amber-500" />
+                                            </button>
+                                          )}
+ 
+                                          <button
+                                            type="button"
+                                            onClick={() => removeFromDept(s.user_id)}
+                                            disabled={patching}
+                                            className="inline-flex items-center justify-center h-8 w-8 rounded-xl border border-neutral-100 text-neutral-400 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all"
+                                            title="Remove from department"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
                     )}
@@ -853,6 +959,34 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
                 value={staffForm.password}
                 onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
               />
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-500">User type</label>
+                <select
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  value={staffForm.user_type}
+                  onChange={(e) => setStaffForm({ ...staffForm, user_type: e.target.value })}
+                >
+                  <option value="STAFF">Staff (Learner)</option>
+                  <option value="DEPT_ADMIN">Department Admin (Head)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-500">Security role</label>
+                <select
+                  required
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  value={staffForm.role_id}
+                  onChange={(e) => setStaffForm({ ...staffForm, role_id: e.target.value })}
+                >
+                  <option value="">Select a role…</option>
+                  {roles.map((r: any) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setAddStaffDept(null)} className="px-3 py-2 text-sm text-gray-600">
                   Cancel
@@ -953,6 +1087,19 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
                 </option>
               ))}
             </select>
+
+            <div className="flex items-center gap-2 py-1">
+              <input
+                id="assignHeadCheck"
+                type="checkbox"
+                className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                checked={assignAsHead}
+                onChange={(e) => setAssignAsHead(e.target.checked)}
+              />
+              <label htmlFor="assignHeadCheck" className="text-sm text-gray-700 font-medium cursor-pointer">
+                Assign as Department Head
+              </label>
+            </div>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setAssignDept(null)} className="px-3 py-2 text-sm text-gray-600">
                 Cancel
@@ -964,6 +1111,138 @@ export default function DepartmentManagement({ currentUser }: DepartmentManageme
                 className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg disabled:opacity-50"
               >
                 Assign to department
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {resetPwdUserId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-neutral-100 max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4">
+                <KeyRound size={24} />
+              </div>
+              <h3 className="text-base font-black text-neutral-900 mb-2">Reset Password?</h3>
+              <p className="text-[13px] text-neutral-500 leading-relaxed px-2">
+                Reset this person’s password to the platform default? They sign in with their phone number and the new temporary password.
+              </p>
+            </div>
+            <div className="flex border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setResetPwdUserId(null)}
+                className="flex-1 px-4 py-4 text-xs font-bold text-neutral-400 hover:bg-neutral-50 transition-colors uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-neutral-100" />
+              <button
+                type="button"
+                onClick={() => void handleConfirmResetPassword()}
+                disabled={!!rosterActionUserId}
+                className="flex-1 px-4 py-4 text-xs font-bold text-amber-600 hover:bg-amber-50 disabled:opacity-50 transition-colors uppercase tracking-widest flex items-center justify-center gap-2"
+              >
+                {rosterActionUserId === resetPwdUserId ? <Loader2 size={14} className="animate-spin" /> : 'Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deactivateUserId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-neutral-100 max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
+                <UserX size={24} />
+              </div>
+              <h3 className="text-base font-black text-neutral-900 mb-2">Deactivate Account?</h3>
+              <p className="text-[13px] text-neutral-500 leading-relaxed px-2">
+                Deactivate this account? They will not be able to sign in until reactivated.
+              </p>
+            </div>
+            <div className="flex border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setDeactivateUserId(null)}
+                className="flex-1 px-4 py-4 text-xs font-bold text-neutral-400 hover:bg-neutral-50 transition-colors uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-neutral-100" />
+              <button
+                type="button"
+                onClick={() => void handleConfirmDeactivate()}
+                disabled={!!rosterActionUserId}
+                className="flex-1 px-4 py-4 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors uppercase tracking-widest flex items-center justify-center gap-2"
+              >
+                {rosterActionUserId === deactivateUserId ? <Loader2 size={14} className="animate-spin" /> : 'Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {makeHeadData && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-neutral-100 max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-4 border border-amber-100">
+                <Crown size={24} />
+              </div>
+              <h3 className="text-base font-black text-neutral-900 mb-2">Promote to Head?</h3>
+              <p className="text-[13px] text-neutral-500 leading-relaxed px-2">
+                Make this person the department admin (head)? Any other department admin in this department becomes a regular staff user.
+              </p>
+            </div>
+            <div className="flex border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setMakeHeadData(null)}
+                className="flex-1 px-4 py-4 text-xs font-bold text-neutral-400 hover:bg-neutral-50 transition-colors uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-neutral-100" />
+              <button
+                type="button"
+                onClick={() => void handleConfirmMakeHead()}
+                disabled={!!rosterActionUserId}
+                className="flex-1 px-4 py-4 text-xs font-bold text-amber-600 hover:bg-amber-50 disabled:opacity-50 transition-colors uppercase tracking-widest flex items-center justify-center gap-2"
+              >
+                {rosterActionUserId === makeHeadData?.userId ? <Loader2 size={14} className="animate-spin" /> : 'Promote'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {removeUserId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-neutral-100 max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4 border border-red-100">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-base font-black text-neutral-900 mb-2">Remove from Dept?</h3>
+              <p className="text-[13px] text-neutral-500 leading-relaxed px-2">
+                Remove this user from the department? They will become unassigned staff.
+              </p>
+            </div>
+            <div className="flex border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setRemoveUserId(null)}
+                className="flex-1 px-4 py-4 text-xs font-bold text-neutral-400 hover:bg-neutral-50 transition-colors uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <div className="w-px bg-neutral-100" />
+              <button
+                type="button"
+                onClick={() => void handleConfirmRemoveFromDept()}
+                disabled={!!rosterActionUserId}
+                className="flex-1 px-4 py-4 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors uppercase tracking-widest flex items-center justify-center gap-2"
+              >
+                {rosterActionUserId === removeUserId ? <Loader2 size={14} className="animate-spin" /> : 'Remove'}
               </button>
             </div>
           </div>

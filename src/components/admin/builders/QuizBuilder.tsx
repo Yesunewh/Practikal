@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { Plus, Trash2, Check } from 'lucide-react';
-import type { QuestionContent, QuestionKind, QuestionVerdictContext } from '../../../types';
+import type {
+  QuestionContent,
+  QuestionKind,
+  QuestionVerdictContext,
+  VerdictMessageChannel,
+} from '../../../types';
 import { QUESTION_KIND_OPTIONS } from '../../../constants/questionKinds';
 import { validateQuestionContent } from '../../../utils/validateQuestionStepContent';
 import toast from 'react-hot-toast';
+import GmailMockMessage from '../../GmailMockMessage';
+import WhatsAppMockMessage from '../../WhatsAppMockMessage';
+import TelegramMockMessage from '../../TelegramMockMessage';
 
 interface QuizBuilderProps {
   onSave: (stepData: {
@@ -31,6 +39,47 @@ const VERDICT_OPTIONS = () => [
   { id: 'bv-2', text: 'Looks real', isCorrect: false },
 ];
 
+const VERDICT_BODY_DEFAULTS: Record<VerdictMessageChannel, string> = {
+  gmail: `Dear network user,
+
+This email is meant to inform you that your MyUniversity network password will expire in 24 hours.
+Please follow the link below to update your password
+myuniversity.edu/renewal
+
+Thank you
+MyUniversity Network Security Staff`,
+  whatsapp: 'Hello, this is payroll support. Please verify your account details now.',
+  telegram: `It's a good start, but I think you can improve it more and do even better.`,
+};
+
+const VERDICT_CONTEXT_DEFAULTS: Record<VerdictMessageChannel, QuestionVerdictContext> = {
+  gmail: {
+    channel: 'gmail',
+    clientBrand: 'Gmail',
+    fromLine: 'info@insa.com.et',
+    subjectLine: 'your new acount',
+  },
+  whatsapp: {
+    channel: 'whatsapp',
+    fromLine: 'IT Security Team',
+    subjectLine: '+251 91 000 0000',
+  },
+  telegram: {
+    channel: 'telegram',
+    fromLine: 'Edemy',
+    subjectLine: 'Waiting for network...',
+    telegramShowOwnerBadge: true,
+    telegramQuoteAuthor: 'Friend',
+    telegramQuotePreview: 'Please tell me',
+  },
+};
+
+const VERDICT_CHANNEL_OPTIONS: { value: VerdictMessageChannel; label: string }[] = [
+  { value: 'gmail', label: 'Gmail-style email' },
+  { value: 'whatsapp', label: 'WhatsApp-style chat' },
+  { value: 'telegram', label: 'Telegram-style chat' },
+];
+
 export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
   const [questionKind, setQuestionKind] = useState<QuestionKind>('multiple_choice');
   const [question, setQuestion] = useState('');
@@ -42,6 +91,7 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
   const [explanation, setExplanation] = useState('');
   const [scenarioBody, setScenarioBody] = useState('');
   const [verdictContext, setVerdictContext] = useState<QuestionVerdictContext>({
+    channel: 'gmail',
     clientBrand: 'Gmail',
     fromLine: '',
     subjectLine: '',
@@ -55,13 +105,39 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
     } else if (kind === 'binary_verdict') {
       setOptions(VERDICT_OPTIONS());
       setMultipleAnswers(false);
-      setVerdictContext({
-        clientBrand: 'Gmail',
-        fromLine: 'info@insa.com.et',
-        subjectLine: 'your new acount',
-      });
-      setScenarioBody('dear azimeraw here is your account');
+      setVerdictContext({ ...VERDICT_CONTEXT_DEFAULTS.gmail });
+      setScenarioBody(VERDICT_BODY_DEFAULTS.gmail);
     }
+  };
+
+  const setVerdictChannel = (channel: VerdictMessageChannel) => {
+    setVerdictContext((prev) => {
+      const base = { ...(VERDICT_CONTEXT_DEFAULTS[channel] as QuestionVerdictContext) };
+      return {
+        ...base,
+        ...prev,
+        channel,
+        clientBrand: channel === 'gmail' ? prev.clientBrand?.trim() || 'Gmail' : undefined,
+        fromLine: prev.fromLine?.trim() ? prev.fromLine : base.fromLine,
+        subjectLine: prev.subjectLine?.trim() ? prev.subjectLine : base.subjectLine,
+        institutionFooter: channel === 'gmail' ? prev.institutionFooter ?? base.institutionFooter : undefined,
+        telegramShowOwnerBadge:
+          channel === 'telegram' ? prev.telegramShowOwnerBadge ?? base.telegramShowOwnerBadge : undefined,
+        telegramQuoteAuthor:
+          channel === 'telegram'
+            ? prev.telegramQuoteAuthor?.trim()
+              ? prev.telegramQuoteAuthor
+              : base.telegramQuoteAuthor
+            : undefined,
+        telegramQuotePreview:
+          channel === 'telegram'
+            ? prev.telegramQuotePreview?.trim()
+              ? prev.telegramQuotePreview
+              : base.telegramQuotePreview
+            : undefined,
+      };
+    });
+    setScenarioBody((prev) => (prev.trim() ? prev : VERDICT_BODY_DEFAULTS[channel]));
   };
 
   const addOption = () => {
@@ -110,11 +186,32 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
       questionKind,
       ...(questionKind === 'binary_verdict'
         ? {
+            // Persist selected channel and normalize optional chrome fields.
+            // Existing records without channel still render as Gmail by default.
             scenarioBody: scenarioBody.trim(),
             verdictContext: {
-              clientBrand: verdictContext.clientBrand?.trim() || 'Gmail',
+              channel: verdictContext.channel ?? 'gmail',
+              clientBrand:
+                (verdictContext.channel ?? 'gmail') === 'gmail'
+                  ? verdictContext.clientBrand?.trim() || 'Gmail'
+                  : undefined,
               fromLine: verdictContext.fromLine?.trim(),
               subjectLine: verdictContext.subjectLine?.trim(),
+              ...((verdictContext.channel ?? 'gmail') === 'gmail' && verdictContext.institutionFooter === true
+                ? { institutionFooter: true as const }
+                : {}),
+              ...((verdictContext.channel ?? 'gmail') === 'telegram' &&
+              verdictContext.telegramShowOwnerBadge === true
+                ? { telegramShowOwnerBadge: true as const }
+                : {}),
+              ...((verdictContext.channel ?? 'gmail') === 'telegram' &&
+              verdictContext.telegramQuoteAuthor?.trim() &&
+              verdictContext.telegramQuotePreview?.trim()
+                ? {
+                    telegramQuoteAuthor: verdictContext.telegramQuoteAuthor.trim(),
+                    telegramQuotePreview: verdictContext.telegramQuotePreview.trim(),
+                  }
+                : {}),
             },
           }
         : {}),
@@ -130,6 +227,9 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
   };
 
   const verdictMeta = QUESTION_KIND_OPTIONS.find((o) => o.value === questionKind);
+  const verdictChannel = verdictContext.channel ?? 'gmail';
+  const isGmailChannel = verdictChannel === 'gmail';
+  const isTelegramChannel = verdictChannel === 'telegram';
 
   return (
     <div className="space-y-6">
@@ -178,25 +278,77 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
 
       {questionKind === 'binary_verdict' && (
         <div className="space-y-4 border rounded-lg p-4 bg-gray-50">
-          <h4 className="text-sm font-semibold text-gray-800">Mock message (Gmail-style preview)</h4>
+          <h4 className="text-sm font-semibold text-gray-800">Mock message channel and content</h4>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Mail client label</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-              placeholder="Gmail"
-              value={verdictContext.clientBrand ?? ''}
-              onChange={(e) =>
-                setVerdictContext({ ...verdictContext, clientBrand: e.target.value })
-              }
-            />
+            <label className="block text-xs font-medium text-gray-600 mb-2">Message channel</label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {VERDICT_CHANNEL_OPTIONS.map(({ value: channel, label }) => {
+                const selected = verdictChannel === channel;
+                return (
+                  <button
+                    key={channel}
+                    type="button"
+                    onClick={() => setVerdictChannel(channel)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                      selected
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }`}
+                    aria-pressed={selected}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+          {isGmailChannel && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Mail client label</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="Gmail"
+                  value={verdictContext.clientBrand ?? ''}
+                  onChange={(e) =>
+                    setVerdictContext({ ...verdictContext, clientBrand: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  id="gmailInstitutionFooter"
+                  checked={verdictContext.institutionFooter === true}
+                  onChange={(e) =>
+                    setVerdictContext({
+                      ...verdictContext,
+                      institutionFooter: e.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-emerald-600"
+                />
+                <label htmlFor="gmailInstitutionFooter" className="text-sm text-gray-700">
+                  Show university logo footer (MY UNIVERSITY block under the message)
+                </label>
+              </div>
+            </>
+          )}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">From line</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              {isGmailChannel ? 'From line' : 'Contact name *'}
+            </label>
             <input
               type="text"
               className="w-full px-3 py-2 border rounded-lg text-sm"
-              placeholder="e.g. info@insa.com.et or Name &lt;email@domain.com&gt;"
+              placeholder={
+                isGmailChannel
+                  ? 'e.g. info@insa.com.et or Name <email@domain.com>'
+                  : verdictChannel === 'telegram'
+                    ? 'e.g. Edemy'
+                    : 'e.g. HR Team'
+              }
               value={verdictContext.fromLine ?? ''}
               onChange={(e) =>
                 setVerdictContext({ ...verdictContext, fromLine: e.target.value })
@@ -204,23 +356,86 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              {isGmailChannel ? 'Subject line' : 'Subtitle (optional)'}
+            </label>
             <input
               type="text"
               className="w-full px-3 py-2 border rounded-lg text-sm"
-              placeholder="e.g. DocuSign: Please review this document"
+              placeholder={
+                isGmailChannel
+                  ? 'e.g. DocuSign: Please review this document'
+                  : verdictChannel === 'telegram'
+                    ? 'e.g. Waiting for network...'
+                    : 'e.g. +251 91 000 0000'
+              }
               value={verdictContext.subjectLine ?? ''}
               onChange={(e) =>
                 setVerdictContext({ ...verdictContext, subjectLine: e.target.value })
               }
             />
           </div>
+          {isTelegramChannel && (
+            <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="telegramOwnerBadge"
+                  checked={verdictContext.telegramShowOwnerBadge === true}
+                  onChange={(e) =>
+                    setVerdictContext({
+                      ...verdictContext,
+                      telegramShowOwnerBadge: e.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-emerald-600"
+                />
+                <label htmlFor="telegramOwnerBadge" className="text-sm text-gray-700">
+                  Show “Owner” badge (purple tag)
+                </label>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Reply quote author (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="e.g. Friend"
+                  value={verdictContext.telegramQuoteAuthor ?? ''}
+                  onChange={(e) =>
+                    setVerdictContext({ ...verdictContext, telegramQuoteAuthor: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Reply quote preview (optional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="e.g. Please tell me"
+                  value={verdictContext.telegramQuotePreview ?? ''}
+                  onChange={(e) =>
+                    setVerdictContext({ ...verdictContext, telegramQuotePreview: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Message body *</label>
             <textarea
               className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
               rows={8}
-              placeholder="Paste or write the email body learners will evaluate…"
+              placeholder={
+                isGmailChannel
+                  ? 'Paste or write the email body learners will evaluate...'
+                  : verdictChannel === 'telegram'
+                    ? 'Use **bold**, https:// links, and #hashtags in plain text...'
+                    : 'Paste or write the chat message learners will evaluate...'
+              }
               value={scenarioBody}
               onChange={(e) => setScenarioBody(e.target.value)}
             />
@@ -271,7 +486,44 @@ export default function QuizBuilder({ onSave, onCancel }: QuizBuilderProps) {
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 mb-4">
           <div className="bg-white rounded-lg p-6 shadow-sm max-w-2xl mx-auto text-sm text-gray-500">
             {questionKind === 'binary_verdict' ? (
-              <p>Preview: learners see your headline, the mock message in the center, and two side actions.</p>
+              <div className="space-y-3">
+                <p>
+                  Preview: learners see your headline, the mock message in the center, and two side actions.
+                </p>
+                <div className="h-[280px] overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+                  {verdictChannel === 'whatsapp' ? (
+                    <WhatsAppMockMessage
+                      fromLine={verdictContext.fromLine}
+                      subjectLine={verdictContext.subjectLine}
+                      body={scenarioBody}
+                    />
+                  ) : verdictChannel === 'telegram' ? (
+                    <TelegramMockMessage
+                      fromLine={verdictContext.fromLine}
+                      subjectLine={verdictContext.subjectLine}
+                      body={scenarioBody}
+                      showOwnerBadge={verdictContext.telegramShowOwnerBadge === true}
+                      replyQuote={
+                        verdictContext.telegramQuoteAuthor?.trim() &&
+                        verdictContext.telegramQuotePreview?.trim()
+                          ? {
+                              author: verdictContext.telegramQuoteAuthor.trim(),
+                              preview: verdictContext.telegramQuotePreview.trim(),
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <GmailMockMessage
+                      clientBrand={verdictContext.clientBrand}
+                      fromLine={verdictContext.fromLine}
+                      subjectLine={verdictContext.subjectLine}
+                      body={scenarioBody}
+                      institutionFooter={verdictContext.institutionFooter === true}
+                    />
+                  )}
+                </div>
+              </div>
             ) : (
               <p>Learners tap one row below the prompt (or several if multi-select is on).</p>
             )}

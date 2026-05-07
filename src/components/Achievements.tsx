@@ -18,6 +18,8 @@ import { selectUserProgress } from '../store/slices/progressSlice';
 import { useGetGamificationAchievementsMeQuery } from '../store/apiSlice/practikalApi';
 import { useGamificationApi } from '../config/gamification';
 import { achievements as offlineAchievementDefs } from '../data/mockData';
+import { useI18n } from '../i18n/I18nContext';
+import { interpolate } from '../i18n/messages';
 
 type ApiAchievementRow = {
   id: string;
@@ -59,6 +61,9 @@ function formatUnlockedDate(iso: string | null | undefined): string | null {
 }
 
 export default function Achievements() {
+  const { messages } = useI18n();
+  const a = messages.achievements;
+  const com = messages.common;
   const user = useSelector((state: RootState) => state.auth.user);
   const challenges = useSelector((state: RootState) => state.challenges.challenges);
 
@@ -151,36 +156,38 @@ export default function Achievements() {
                   <Medal className="h-6 w-6" aria-hidden />
                 </div>
                 <div className="min-w-0">
-                  <h1 className="text-lg font-semibold tracking-tight text-emerald-950 sm:text-xl">Achievements</h1>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-800/80 sm:text-sm">
-                    {useGamificationApi
-                      ? 'Badges sync from the server when you pass challenges, build streaks, or meet other goals.'
-                      : 'Gamification API is off — static list only. Enable the API for live progress.'}
-                  </p>
+                  <h1 className="text-lg font-semibold tracking-tight text-emerald-950 sm:text-xl">{a.title}</h1>
+                  {(useGamificationApi ? a.subtitleLive : a.subtitleOff)?.trim() ? (
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-emerald-800/80 sm:text-sm">
+                      {useGamificationApi ? a.subtitleLive : a.subtitleOff}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
                 <div className="tabular-nums text-lg font-semibold text-emerald-900 sm:text-xl">
                   {earnedCount}
-                  <span className="text-sm font-medium text-emerald-700/80">/{totalCount || '—'}</span>
+                  <span className="text-sm font-medium text-emerald-700/80">/{totalCount || com.dash}</span>
                 </div>
-                <span className="text-[11px] font-medium uppercase tracking-wide text-emerald-700/70">badges earned</span>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-emerald-700/70">
+                  {a.badgesEarned}
+                </span>
               </div>
             </div>
 
             {showApiLoading && (
-              <p className="mt-3 text-sm text-emerald-800/80">Loading achievements…</p>
+              <p className="mt-3 text-sm text-emerald-800/80">{a.loading}</p>
             )}
             {isError && useGamificationApi && !skipApi && (
               <p className="mt-3 text-sm text-red-600" role="alert">
-                Could not load achievements. Try again later.
+                {a.loadError}
               </p>
             )}
 
             {totalCount > 0 && (
               <div className="mt-4">
                 <div className="mb-1 flex justify-between text-[10px] font-medium uppercase tracking-wide text-emerald-800/70">
-                  <span>Badge collection</span>
+                  <span>{a.badgeCollection}</span>
                   <span className="tabular-nums">{badgePct}%</span>
                 </div>
                 <div
@@ -189,7 +196,7 @@ export default function Achievements() {
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={badgePct}
-                  aria-label={`${earnedCount} of ${totalCount} achievements earned`}
+                  aria-label={interpolate(a.badgeProgressAria, { earned: earnedCount, total: totalCount })}
                 >
                   <div
                     className="h-full rounded-full bg-emerald-600 transition-all duration-500"
@@ -201,7 +208,7 @@ export default function Achievements() {
 
             {nextGoal && (
               <div className="mt-4 rounded-xl border border-emerald-100/80 bg-white/70 px-3 py-2.5 text-sm text-emerald-900">
-                <span className="text-emerald-700/80">Next goal: </span>
+                <span className="text-emerald-700/80">{a.nextGoal} </span>
                 <span className="font-medium">{nextGoal.title}</span>
                 <span className="text-emerald-700/75">
                   {' '}
@@ -215,27 +222,27 @@ export default function Achievements() {
                 <div className="rounded-xl border border-gray-100 bg-white/90 px-3 py-2.5 shadow-sm">
                   <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">
                     <Trophy className="h-3.5 w-3.5 text-emerald-600" />
-                    Challenges
+                    {a.statChallenges}
                   </div>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900">
                     {userProgress.totalChallengesCompleted}
                   </p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-white/90 px-3 py-2.5 shadow-sm">
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Avg score</div>
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-gray-500">{a.statAvgScore}</div>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900">{userProgress.averageScore}%</p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-white/90 px-3 py-2.5 shadow-sm">
                   <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">
                     <Clock className="h-3.5 w-3.5 text-emerald-600" />
-                    Time
+                    {a.statTime}
                   </div>
                   <p className="mt-1 text-lg font-semibold text-gray-900">{formatTime(userProgress.totalTimeSpent)}</p>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-white/90 px-3 py-2.5 shadow-sm">
                   <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">
                     <Flame className="h-3.5 w-3.5 text-orange-500" />
-                    Streak
+                    {a.statStreak}
                   </div>
                   <p className="mt-1 text-lg font-semibold tabular-nums text-gray-900">{userProgress.currentStreak}d</p>
                 </div>
@@ -243,7 +250,7 @@ export default function Achievements() {
             )}
 
             {showOfflineNote && (
-              <p className="mt-3 text-[11px] text-emerald-800/65">Training stats above use your local progress record.</p>
+              <p className="mt-3 text-[11px] text-emerald-800/65">{a.localNote}</p>
             )}
 
             {user && (
@@ -254,7 +261,7 @@ export default function Achievements() {
                   className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-900 shadow-sm hover:bg-emerald-50/80"
                 >
                   <Printer className="h-4 w-4" />
-                  Print summary
+                  {a.printSummary}
                 </button>
               </div>
             )}
@@ -264,7 +271,7 @@ export default function Achievements() {
         <main className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
           {showApiEmpty && (
             <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-600 shadow-sm">
-              No achievements are in the catalog yet. An admin can add definitions in the database or seed data.
+              {a.emptyCatalog}
             </div>
           )}
 
@@ -296,7 +303,7 @@ export default function Achievements() {
                         </h2>
                         {earned && (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
-                            Earned
+                            {a.earned}
                           </span>
                         )}
                       </div>
@@ -305,7 +312,7 @@ export default function Achievements() {
                       {achievement.total != null && achievement.total > 0 && (
                         <div className="mt-3">
                           <div className="mb-1 flex justify-between text-xs text-gray-500">
-                            <span>Progress</span>
+                            <span>{com.progress}</span>
                             <span className="tabular-nums">
                               {achievement.progress ?? 0} / {achievement.total}
                             </span>
@@ -322,7 +329,9 @@ export default function Achievements() {
                       {earned && dateLabel && (
                         <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-800">
                           <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                          <span>Unlocked {dateLabel}</span>
+                          <span>
+                            {a.unlockedPrefix} {dateLabel}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -338,35 +347,38 @@ export default function Achievements() {
         id="practikal-certificate"
         className="hidden print:block min-h-screen max-w-3xl bg-white p-10 text-gray-900 mx-auto"
       >
-        <h1 className="mb-6 border-b pb-4 text-2xl font-bold">Practikal — learning summary</h1>
+        <h1 className="mb-6 border-b pb-4 text-2xl font-bold">{a.certHeading}</h1>
         {user && (
           <>
             <p className="mb-6 text-sm text-gray-600">
-              Generated {new Date().toLocaleDateString()} · {user.name} · {user.organization}
+              {interpolate(a.generatedLine, {
+                date: new Date().toLocaleDateString(),
+                name: user.name,
+                org: user.organization,
+              })}
             </p>
             {userProgress && (
               <ul className="space-y-3 text-base">
                 <li>
-                  <strong>Challenges completed:</strong> {userProgress.totalChallengesCompleted} /{' '}
-                  {userProgress.totalChallengesAvailable}
+                  {interpolate(a.certChallenges, {
+                    done: userProgress.totalChallengesCompleted,
+                    avail: userProgress.totalChallengesAvailable,
+                  })}
                 </li>
+                <li>{interpolate(a.certCompletionRate, { pct: userProgress.completionRate.toFixed(0) })}</li>
+                <li>{interpolate(a.certAvgScore, { pct: userProgress.averageScore })}</li>
                 <li>
-                  <strong>Completion rate:</strong> {userProgress.completionRate.toFixed(0)}%
+                  {interpolate(a.certStreak, {
+                    current: userProgress.currentStreak,
+                    best: userProgress.longestStreak,
+                  })}
                 </li>
-                <li>
-                  <strong>Average score:</strong> {userProgress.averageScore}%
-                </li>
-                <li>
-                  <strong>Learning streak (days):</strong> {userProgress.currentStreak} (best {userProgress.longestStreak})
-                </li>
-                <li>
-                  <strong>Total learning time:</strong> {formatTime(userProgress.totalTimeSpent)}
-                </li>
+                <li>{interpolate(a.certTime, { time: formatTime(userProgress.totalTimeSpent) })}</li>
               </ul>
             )}
             {achievementsList.filter(isEarned).length > 0 && (
               <div className="mt-8">
-                <h2 className="mb-2 font-semibold">Achievements earned</h2>
+                <h2 className="mb-2 font-semibold">{a.certEarnedTitle}</h2>
                 <ul className="list-disc space-y-1 pl-5 text-sm">
                   {achievementsList.filter(isEarned).map((a) => (
                     <li key={a.id}>{a.title}</li>
@@ -374,9 +386,7 @@ export default function Achievements() {
                 </ul>
               </div>
             )}
-            <p className="mt-10 text-sm text-gray-500">
-              This document was produced from your training record for awareness purposes only.
-            </p>
+            <p className="mt-10 text-sm text-gray-500">{a.certFooter}</p>
           </>
         )}
       </div>

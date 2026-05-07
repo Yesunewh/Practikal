@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useLoginMutation, useRegisterMutation } from '../store/apiSlice/practikalApi';
 import { setUser } from '../store/slices/authSlice';
-import { User, UserRole, Rank } from '../types';
+import { User as AppUser, UserRole, Rank } from '../types';
 import { Shield, Eye, EyeOff, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useI18n } from '../i18n/I18nContext';
+import { interpolate } from '../i18n/messages';
+import { normalizeUserTypeKey, pickUserTypeFromLoginBlob, unwrapLoginApiResult } from '../utils/authIdentity';
 
 function rtkErrorMessage(err: unknown): string {
   if (!err || typeof err !== 'object') return '';
@@ -17,9 +20,7 @@ function rtkErrorMessage(err: unknown): string {
   return '';
 }
 
-const BRAND = 'Practikal';
-
-function rankFromLevel(level: string | undefined): User['rank'] {
+function rankFromLevel(level: string | undefined): AppUser['rank'] {
   const ladder: Rank[] = ['beginner', 'medior', 'senior', 'professional', 'specialist', 'master', 'legend'];
   const cur = (level && ladder.includes(level as Rank) ? level : 'beginner') as Rank;
   const idx = ladder.indexOf(cur);
@@ -32,8 +33,34 @@ function rankFromLevel(level: string | undefined): User['rank'] {
   };
 }
 
+/** Login `/users/login` user payload (nested Sequelize + flat fields from API). */
+type LoginResponseUser = {
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email?: string | null;
+  phone_number?: string | null;
+  Organization?: { name?: string } | null;
+  Department?: { name?: string } | null;
+  department_name?: string | null;
+  role_display_name?: string | null;
+  user_type?: string;
+  org_id?: string | null;
+  dept_id?: string | null;
+  unit_id?: string | null;
+  gamification_level?: string | null;
+  gamification_xp?: number | null;
+  gamification_xp_to_next?: number | null;
+  gamification_reputation?: number | null;
+  gamification_streak?: number | null;
+  created_at?: string | null;
+};
+
 function Login() {
   const dispatch = useDispatch();
+  const { messages } = useI18n();
+  const a = messages.auth;
+  const brand = messages.common.brand;
   const [login, { isLoading: isLoggingIn }] = useLoginMutation();
   const [register, { isLoading: isRegistering }] = useRegisterMutation();
 
@@ -48,8 +75,8 @@ function Login() {
   const busy = isLoggingIn || isRegistering;
 
   useEffect(() => {
-    document.title = isLogin ? `Sign in · ${BRAND}` : `Create account · ${BRAND}`;
-  }, [isLogin]);
+    document.title = interpolate(isLogin ? a.docTitleSignIn : a.docTitleRegister, { brand });
+  }, [isLogin, a.docTitleSignIn, a.docTitleRegister, brand]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,9 +91,7 @@ function Login() {
           email: email.trim() || undefined,
         }).unwrap();
 
-        toast.success(
-          'Account created. A platform administrator must activate your account before you can sign in.',
-        );
+        toast.success(a.toastAccountCreated);
         setIsLogin(true);
         setFirstName('');
         setLastName('');
@@ -80,60 +105,105 @@ function Login() {
         password: password.trim(),
       }).unwrap();
 
-      if (!result?.token) {
+      const extracted = unwrapLoginApiResult(result);
+
+      if (!extracted.token) {
         const pending =
-          typeof result?.message === 'string'
-            ? result.message
-            : 'This account is not active yet. Wait for a platform administrator to approve your registration.';
+          typeof extracted.message === 'string' ? extracted.message : a.toastPendingDefault;
         toast.error(pending);
         return;
       }
 
-      const { token, user, permissions } = result;
+      if (!extracted.user || typeof extracted.user.user_id !== 'string') {
+        toast.error(a.toastSignInFailed);
+        return;
+      }
 
+      const token = extracted.token;
+      const permissions = extracted.permissions ?? [];
+      const loginUser = extracted.user as LoginResponseUser;
+
+      const userBlob = extracted.user as Record<string, unknown>;
+      let userTypeNorm = normalizeUserTypeKey(pickUserTypeFromLoginBlob(userBlob));
+      if (
+        !userTypeNorm &&
+        Array.isArray(permissions) &&
+        permissions.includes('MANAGE_TENANTS') &&
+        permissions.includes('MANAGE_SYSTEM')
+      ) {
+        userTypeNorm = 'SUPERADMIN';
+      }
       let mappedRole: UserRole = 'user';
-      if (user.user_type === 'SUPERADMIN') {
+      if (userTypeNorm === 'SUPERADMIN') {
         mappedRole = 'superadmin';
-      } else if (['ORG_ADMIN', 'UNIT_ADMIN', 'DEPT_ADMIN'].includes(user.user_type)) {
+      } else if (
+        userTypeNorm &&
+        ['ORG_ADMIN', 'UNIT_ADMIN', 'DEPT_ADMIN'].includes(userTypeNorm)
+      ) {
+        mappedRole = 'admin';
+      } else if (
+        Array.isArray(permissions) &&
+        permissions.some((p) =>
+          [
+            'VIEW_REPORTS',
+            'MANAGE_USERS',
+            'IMPORT_USERS',
+            'MANAGE_CAMPAIGNS',
+            'MANAGE_HIERARCHY',
+            'MANAGE_ROLES',
+            'MANAGE_PERMISSIONS',
+            'MANAGE_DEPARTMENTS',
+            'MANAGE_TERMINOLOGY',
+            'MANAGE_CHALLENGES',
+            'MANAGE_EXAMS',
+          ].includes(p),
+        )
+      ) {
         mappedRole = 'admin';
       }
 
-      const levelStr = user.gamification_level || 'beginner';
-      const mappedUser: User = {
-        id: user.user_id,
-        name: `${user.first_name} ${user.last_name}`,
-        email: user.email || '',
-        organization: user.Organization?.name || 'Practikal',
+      const levelStr = loginUser.gamification_level || 'beginner';
+      const deptFlat = typeof loginUser.department_name === 'string' ? loginUser.department_name.trim() : '';
+      const departmentName = deptFlat || loginUser.Department?.name?.trim() || null;
+      const roleDisplayName = (loginUser.role_display_name ?? '').trim();
+
+      const mappedUser: AppUser = {
+        id: loginUser.user_id,
+        name: `${loginUser.first_name} ${loginUser.last_name}`,
+        first_name: loginUser.first_name,
+        last_name: loginUser.last_name,
+        email: loginUser.email || '',
+        phone_number: loginUser.phone_number || '',
+        organization: loginUser.Organization?.name || brand,
         level: levelStr,
-        xp: typeof user.gamification_xp === 'number' ? user.gamification_xp : 0,
+        xp: typeof loginUser.gamification_xp === 'number' ? loginUser.gamification_xp : 0,
         xpToNextLevel:
-          typeof user.gamification_xp_to_next === 'number' ? user.gamification_xp_to_next : 1000,
-        reputation: typeof user.gamification_reputation === 'number' ? user.gamification_reputation : 0,
+          typeof loginUser.gamification_xp_to_next === 'number' ? loginUser.gamification_xp_to_next : 1000,
+        reputation: typeof loginUser.gamification_reputation === 'number' ? loginUser.gamification_reputation : 0,
         achievements: [],
         completedChallenges: [],
-        streak: typeof user.gamification_streak === 'number' ? user.gamification_streak : 0,
-        rank: rankFromLevel(user.gamification_level),
+        streak: typeof loginUser.gamification_streak === 'number' ? loginUser.gamification_streak : 0,
+        rank: rankFromLevel(loginUser.gamification_level),
         role: mappedRole,
-        orgId: user.org_id,
-        deptId: user.dept_id || undefined,
-        unitId: user.unit_id || undefined,
-        user_type: user.user_type,
+        orgId: loginUser.org_id,
+        deptId: loginUser.dept_id || undefined,
+        departmentName,
+        roleDisplayName,
+        memberSinceAt: loginUser.created_at ?? undefined,
+        unitId: loginUser.unit_id || undefined,
+        /** Persist canonical enum casing so sidebar / guards match Axios responses */
+        user_type: userTypeNorm ?? loginUser.user_type,
         permissions: permissions || [],
       };
 
       localStorage.setItem('practikal-token', token);
       localStorage.setItem('practikal-user', JSON.stringify(mappedUser));
       dispatch(setUser(mappedUser));
-      toast.success('Signed in successfully.');
+      toast.success(a.toastSignedIn);
     } catch (error) {
       console.error('Authentication error:', error);
       const msg = rtkErrorMessage(error);
-      toast.error(
-        msg ||
-          (isLogin
-            ? 'Sign-in failed. Use the phone number on file and the correct password.'
-            : 'Registration failed. Check your details and try again.'),
-      );
+      toast.error(msg || (isLogin ? a.toastSignInFailed : a.toastRegisterFailed));
     }
   };
 
@@ -142,7 +212,7 @@ function Login() {
       {/* Hero: desktop/tablet only — hidden on small screens so the form fits the viewport */}
       <section
         className="relative hidden min-h-0 flex-1 flex-col overflow-hidden isolate lg:flex lg:min-w-0"
-        aria-label="Product overview"
+        aria-label={a.productOverviewAria}
       >
         <div
           className="absolute inset-0 bg-gray-900 bg-[url('/login-hero.webp')] bg-cover bg-center bg-no-repeat scale-105 motion-safe:lg:scale-100"
@@ -162,16 +232,14 @@ function Login() {
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/90 backdrop-blur-md w-fit">
               <Sparkles className="h-3.5 w-3.5 text-emerald-300" strokeWidth={2} aria-hidden />
-              {isLogin ? 'Secure sign-in' : 'Register — approval required'}
+              {isLogin ? a.heroBadgeSignIn : a.heroBadgeRegister}
             </p>
           </div>
 
-          <h2 className="mt-10 lg:mt-14 font-serif text-3xl sm:text-4xl lg:text-5xl xl:text-[3.25rem] font-semibold text-white leading-[1.12] tracking-tight text-balance drop-shadow-sm max-w-2xl">
-            Build a culture that{' '}
+          <h2 className="mt-10 lg:mt-14 max-w-2xl font-serif text-3xl font-semibold leading-[1.12] tracking-tight text-balance text-white drop-shadow-sm sm:text-4xl lg:mt-14 lg:text-5xl xl:text-[3.25rem]">
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 via-white to-teal-200">
-              spots risk early
+              {a.heroHeadline}
             </span>
-            —and responds with confidence.
           </h2>
         </div>
       </section>
@@ -194,7 +262,7 @@ function Login() {
               </div>
               <div className="min-w-0 pt-0.5">
                 <h1 className="font-serif text-2xl font-semibold tracking-tight text-zinc-900 sm:text-[1.65rem]">
-                  {isLogin ? 'Sign in' : 'Create account'}
+                  {isLogin ? a.titleSignIn : a.titleRegister}
                 </h1>
               </div>
             </div>
@@ -204,14 +272,14 @@ function Login() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="reg-first" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      First name
+                      {a.firstName}
                     </label>
                     <input
                       id="reg-first"
                       type="text"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="Jane"
+                      placeholder={a.placeholderFirst}
                       className="w-full rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:border-emerald-500/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                       required
                       autoComplete="given-name"
@@ -219,14 +287,14 @@ function Login() {
                   </div>
                   <div>
                     <label htmlFor="reg-last" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      Last name
+                      {a.lastName}
                     </label>
                     <input
                       id="reg-last"
                       type="text"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Doe"
+                      placeholder={a.placeholderLast}
                       className="w-full rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:border-emerald-500/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                       required
                       autoComplete="family-name"
@@ -238,14 +306,14 @@ function Login() {
               {!isLogin && (
                 <div>
                   <label htmlFor="reg-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                    Email <span className="font-normal normal-case text-zinc-400">(optional)</span>
+                    {a.emailOptional}
                   </label>
                   <input
                     id="reg-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@organization.com"
+                    placeholder={a.placeholderEmail}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:border-emerald-500/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                     autoComplete="email"
                   />
@@ -254,7 +322,7 @@ function Login() {
 
               <div>
                 <label htmlFor="login-phone" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Phone number
+                  {a.phoneNumber}
                 </label>
                 <input
                   id="login-phone"
@@ -263,7 +331,7 @@ function Login() {
                   autoComplete={isLogin ? 'username' : 'tel'}
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="09XXXXXXXX · 10 digits"
+                  placeholder={a.placeholderPhone}
                   className="w-full rounded-xl border border-zinc-200 bg-zinc-50/80 px-3.5 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:border-emerald-500/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   required
                 />
@@ -271,7 +339,7 @@ function Login() {
 
               <div>
                 <label htmlFor="login-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  Password
+                  {a.password}
                 </label>
                 <div className="relative">
                   <input
@@ -279,7 +347,7 @@ function Login() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder={isLogin ? '••••••••' : 'Minimum 6 characters'}
+                    placeholder={isLogin ? a.placeholderPasswordSignIn : a.placeholderPasswordRegister}
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50/80 py-2.5 pl-3.5 pr-11 text-sm text-zinc-900 placeholder:text-zinc-400 transition-colors focus:border-emerald-500/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                     required
                     autoComplete={isLogin ? 'current-password' : 'new-password'}
@@ -289,7 +357,7 @@ function Login() {
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? a.hidePassword : a.showPassword}
                     aria-pressed={showPassword}
                     tabIndex={0}
                   >
@@ -300,8 +368,8 @@ function Login() {
 
               {isLogin && (
                 <p className="text-center text-xs leading-relaxed text-zinc-500">
-                  Forgot your password?{' '}
-                  <span className="text-zinc-600">Ask your organization administrator.</span>
+                  {a.forgotPassword}{' '}
+                  <span className="text-zinc-600">{a.forgotPasswordHint}</span>
                 </p>
               )}
 
@@ -310,14 +378,14 @@ function Login() {
                 disabled={busy}
                 className="mt-2 w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/25 transition hover:from-emerald-500 hover:to-teal-600 disabled:pointer-events-none disabled:opacity-55"
               >
-                {busy ? (isLogin ? 'Signing in…' : 'Submitting…') : isLogin ? 'Sign in' : 'Request account'}
+                {busy ? (isLogin ? a.submitSigningIn : a.submitRegistering) : isLogin ? a.submitSignIn : a.submitRequestAccount}
               </button>
             </form>
 
             <div className="mt-5 border-t border-zinc-100 pt-4 text-center text-sm text-zinc-600 sm:mt-8 sm:pt-6">
               {isLogin ? (
                 <>
-                  New here?{' '}
+                  {a.newHere}{' '}
                   <button
                     type="button"
                     onClick={() => {
@@ -326,12 +394,12 @@ function Login() {
                     }}
                     className="font-semibold text-emerald-700 hover:text-emerald-800"
                   >
-                    Create an account
+                    {a.createAccount}
                   </button>
                 </>
               ) : (
                 <>
-                  Already registered?{' '}
+                  {a.alreadyRegistered}{' '}
                   <button
                     type="button"
                     onClick={() => {
@@ -340,7 +408,7 @@ function Login() {
                     }}
                     className="font-semibold text-emerald-700 hover:text-emerald-800"
                   >
-                    Sign in
+                    {a.signInLink}
                   </button>
                 </>
               )}

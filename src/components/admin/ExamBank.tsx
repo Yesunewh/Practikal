@@ -5,6 +5,8 @@ import { User, Challenge, ChallengeStep } from '../../types';
 import { RootState } from '../../store';
 import { Search, Edit, Trash2, PlusCircle, ChevronDown, FileText, Clock, Award } from 'lucide-react';
 import { useGamificationApi } from '../../config/gamification';
+import { useI18n } from '../../i18n/I18nContext';
+import { interpolate, type Messages } from '../../i18n/messages';
 import {
   useGetGamificationChallengesQuery,
   useDeleteGamificationChallengeMutation,
@@ -57,13 +59,15 @@ interface ExamRow {
   challengeType: string;
 }
 
-function scopeLabelFromChallenge(ch: Challenge): string {
-  if (!ch.orgId && !ch.deptId) return 'Platform';
-  if (ch.deptId) return `Dept · ${String(ch.deptId).slice(0, 8)}…`;
-  return 'Organization';
+type ExamBankCopy = Messages['admin']['challengesHub']['examBank'];
+
+function scopeLabelFromChallenge(ch: Challenge, b: ExamBankCopy): string {
+  if (!ch.orgId && !ch.deptId) return b.scopePlatform;
+  if (ch.deptId) return interpolate(b.scopeDept, { idPrefix: String(ch.deptId).slice(0, 8) });
+  return b.scopeOrg;
 }
 
-function challengeToExamRow(ch: Challenge): ExamRow {
+function challengeToExamRow(ch: Challenge, b: ExamBankCopy): ExamRow {
   const isActive = ch.isActive !== false;
   return {
     id: ch.id,
@@ -75,9 +79,9 @@ function challengeToExamRow(ch: Challenge): ExamRow {
     difficulty: ch.difficulty,
     category: ch.category,
     status: isActive ? 'active' : 'archived',
-    updatedLabel: ch.updatedAt ? new Date(ch.updatedAt).toLocaleDateString() : '—',
+    updatedLabel: ch.updatedAt ? new Date(ch.updatedAt).toLocaleDateString() : b.emDash,
     attempts: typeof ch.attemptCount === 'number' ? ch.attemptCount : 0,
-    scopeLabel: scopeLabelFromChallenge(ch),
+    scopeLabel: scopeLabelFromChallenge(ch, b),
     challengeType: ch.type,
   };
 }
@@ -87,6 +91,8 @@ export default function ExamBank({
   onRequestAuthoring,
   canAuthorChallenges = true,
 }: ExamBankProps) {
+  const { messages } = useI18n();
+  const b = messages.admin.challengesHub.examBank;
   const navigate = useNavigate();
   const canManageApi =
     GAMIFICATION_ADMINS.includes(currentUser.user_type || '') ||
@@ -127,23 +133,31 @@ export default function ExamBank({
 
   const exams: ExamRow[] = useMemo(() => {
     if (useGamificationApi && canManageApi && examBankRes?.challenges?.length) {
-      return (examBankRes.challenges as Challenge[]).map(challengeToExamRow);
+      return (examBankRes.challenges as Challenge[]).map((ch) => challengeToExamRow(ch, b));
     }
     if (!useGamificationApi || !canManageApi) {
       return reduxChallenges.map((ch) =>
-        challengeToExamRow({
-          ...ch,
-          isActive: true,
-          attemptCount: 0,
-        }),
+        challengeToExamRow(
+          {
+            ...ch,
+            isActive: true,
+            attemptCount: 0,
+          },
+          b,
+        ),
       );
     }
     return [];
-  }, [useGamificationApi, canManageApi, examBankRes?.challenges, reduxChallenges]);
+  }, [useGamificationApi, canManageApi, examBankRes?.challenges, reduxChallenges, b]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterDifficulty, filterStatus]);
 
   const filteredExams = exams.filter((exam) => {
     const matchesSearch =
@@ -157,16 +171,33 @@ export default function ExamBank({
     return matchesSearch && matchesDifficulty && matchesStatus;
   });
 
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(filteredExams.length / ITEMS_PER_PAGE);
+  const paginatedExams = filteredExams.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const handleDeleteExam = async (examId: string) => {
-    if (!confirm('Archive this challenge? Learners will no longer see it.')) return;
+    if (!confirm(b.confirmArchive)) return;
     try {
       if (useGamificationApi && canManageApi) {
         await deleteChallengeApi(examId).unwrap();
         await refetch();
       }
     } catch {
-      alert('Could not archive challenge. Check permissions and try again.');
+      alert(b.archiveError);
     }
+  };
+
+  const difficultyLabel: Record<string, string> = {
+    beginner: b.diffBeginner,
+    intermediate: b.diffIntermediate,
+    advanced: b.diffAdvanced,
+  };
+  const statusLabel: Record<string, string> = {
+    active: b.statusActive,
+    archived: b.statusArchived,
   };
 
   const getDifficultyColor = (difficulty: string) => {
@@ -197,7 +228,7 @@ export default function ExamBank({
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <div>
-          <h2 className="text-lg font-semibold text-neutral-800">Learning challenge catalog</h2>
+          <h2 className="text-lg font-semibold text-neutral-800">{b.title}</h2>
         </div>
         {canAuthorChallenges && (
           <button
@@ -206,70 +237,38 @@ export default function ExamBank({
             className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 flex items-center"
           >
             <PlusCircle size={16} className="mr-2" />
-            Create / edit challenges
+            {b.createEditCta}
           </button>
         )}
       </div>
 
-      {useGamificationApi && canManageApi && currentUser.user_type === 'SUPERADMIN' && (
-        <div className="px-6 py-4 border-b bg-amber-50/80 text-sm space-y-2">
-          <p className="font-medium text-amber-900">Filter scope (SUPERADMIN)</p>
-          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <label htmlFor={scopeOrgInputId} className="text-xs font-medium text-amber-900">
-                Organization UUID
-              </label>
-              <span id={`${scopeOrgInputId}-hint`} className="sr-only">
-                Leave empty to include all organizations you can see.
-              </span>
-              <input
-                id={scopeOrgInputId}
-                className="w-full rounded border border-neutral-200 px-3 py-2"
-                aria-describedby={`${scopeOrgInputId}-hint`}
-                value={scopeOrgId}
-                onChange={(e) => setScopeOrgId(e.target.value)}
-              />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <label htmlFor={scopeDeptInputId} className="text-xs font-medium text-amber-900">
-                Department UUID <span className="font-normal text-amber-800/80">(optional)</span>
-              </label>
-              <input
-                id={scopeDeptInputId}
-                className="w-full rounded border border-neutral-200 px-3 py-2"
-                value={scopeDeptId}
-                onChange={(e) => setScopeDeptId(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {useGamificationApi && !canManageApi && (
         <div className="px-6 py-3 border-b text-sm text-amber-800 bg-amber-50">
-          You need admin access to load the challenge catalog from the server.
+          {b.needAdminBanner}
         </div>
       )}
 
       {!useGamificationApi && (
         <div className="px-6 py-3 border-b text-sm text-amber-800 bg-amber-50">
-          API off — showing local challenge list only (no attempt counts, active items only).
+          {b.apiOffBanner}
         </div>
       )}
 
       {isError && useGamificationApi && canManageApi && (
-        <div className="px-6 py-3 border-b text-sm text-red-600">Could not load challenges from the server.</div>
+        <div className="px-6 py-3 border-b text-sm text-red-600">{b.loadError}</div>
       )}
 
       {isFetching && useGamificationApi && canManageApi && (
-        <div className="px-6 py-3 border-b text-sm text-neutral-500">Loading challenges…</div>
+        <div className="px-6 py-3 border-b text-sm text-neutral-500">{b.loading}</div>
       )}
 
       <div className="p-6 border-b">
         <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
           <div className="relative w-full md:w-64">
             <label htmlFor={catalogSearchId} className="sr-only">
-              Search challenges
+              {b.searchSrOnly}
             </label>
             <input
               id={catalogSearchId}
@@ -287,10 +286,10 @@ export default function ExamBank({
               value={filterDifficulty}
               onChange={(e) => setFilterDifficulty(e.target.value)}
             >
-              <option value="all">All Difficulties</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
+              <option value="all">{b.diffAll}</option>
+              <option value="beginner">{b.diffBeginner}</option>
+              <option value="intermediate">{b.diffIntermediate}</option>
+              <option value="advanced">{b.diffAdvanced}</option>
             </select>
             <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
           </div>
@@ -301,9 +300,9 @@ export default function ExamBank({
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
+              <option value="all">{b.statusAll}</option>
+              <option value="active">{b.statusActive}</option>
+              <option value="archived">{b.statusArchived}</option>
             </select>
             <ChevronDown size={18} className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none" />
           </div>
@@ -314,30 +313,30 @@ export default function ExamBank({
         <table className="w-full">
           <thead className="bg-neutral-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Challenge</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Scope</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Details</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Difficulty</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">{b.thChallenge}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">{b.thScope}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">{b.thDetails}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">{b.thDifficulty}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">{b.thStatus}</th>
               <th
                 className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider"
-                title="Total completion attempts (all learners), from the database"
+                title={b.thAttemptsTitle}
               >
-                Attempts
+                {b.thAttempts}
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">{b.thActions}</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-neutral-200">
-            {filteredExams.length === 0 ? (
+            {paginatedExams.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-8 text-center text-sm text-neutral-500">
-                  No challenges match your filters.
-                  {canAuthorChallenges ? ' Create or edit content under Authoring.' : ''}
+                  {b.emptyFilters}
+                  {canAuthorChallenges ? b.emptyHintAuthoring : ''}
                 </td>
               </tr>
             ) : (
-              filteredExams.map((exam) => (
+              paginatedExams.map((exam) => (
                 <tr key={exam.id} className="hover:bg-neutral-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center">
@@ -357,31 +356,35 @@ export default function ExamBank({
                     <div className="flex flex-wrap items-center gap-3 text-sm text-neutral-500">
                       <div className="flex items-center">
                         <Clock size={14} className="mr-1" />
-                        {exam.duration} min
+                        {interpolate(b.detailsMin, { n: exam.duration })}
                       </div>
                       <div className="flex items-center">
                         <FileText size={14} className="mr-1" />
-                        {exam.totalQuestions} steps
+                        {interpolate(b.detailsSteps, { n: exam.totalQuestions })}
                       </div>
                       <div className="flex items-center">
                         <Award size={14} className="mr-1" />
-                        {exam.passingScore}% pass
+                        {interpolate(b.detailsPass, { n: exam.passingScore })}
                       </div>
-                      <div className="text-xs text-neutral-400">Updated {exam.updatedLabel}</div>
+                      <div className="text-xs text-neutral-400">
+                        {b.updatedPrefix} {exam.updatedLabel}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getDifficultyColor(exam.difficulty)}`}
                     >
-                      {exam.difficulty.charAt(0).toUpperCase() + exam.difficulty.slice(1)}
+                      {(difficultyLabel[exam.difficulty] ??
+                        exam.difficulty.charAt(0).toUpperCase() + exam.difficulty.slice(1))}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(exam.status)}`}
                     >
-                      {exam.status.charAt(0).toUpperCase() + exam.status.slice(1)}
+                      {(statusLabel[exam.status] ??
+                        exam.status.charAt(0).toUpperCase() + exam.status.slice(1))}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -394,7 +397,7 @@ export default function ExamBank({
                           <button
                             type="button"
                             className="text-blue-600 hover:text-blue-900"
-                            title="Edit in Authoring"
+                            title={b.editInAuthoring}
                             onClick={() =>
                               onRequestAuthoring ? onRequestAuthoring() : navigate('/admin/challenges')
                             }
@@ -405,7 +408,7 @@ export default function ExamBank({
                             type="button"
                             onClick={() => handleDeleteExam(exam.id)}
                             className="text-red-600 hover:text-red-900"
-                            title="Archive challenge"
+                            title={b.archiveChallenge}
                             disabled={!useGamificationApi || !canManageApi}
                           >
                             <Trash2 size={16} />
@@ -421,10 +424,30 @@ export default function ExamBank({
         </table>
       </div>
 
-      <div className="px-6 py-4 border-t flex items-center justify-between">
+      <div className="px-6 py-4 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="text-sm text-neutral-700">
-          Showing <span className="font-medium">{filteredExams.length}</span> of <span className="font-medium">{exams.length}</span>{' '}
-          challenges
+          {interpolate(b.showingCount, { shown: paginatedExams.length, total: filteredExams.length })}
+        </div>
+        <div className="flex space-x-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-4 py-2 border border-neutral-200 rounded-md text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <div className="flex items-center px-4 text-sm font-medium text-neutral-700">
+            {currentPage} / {totalPages || 1}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages || 1, p + 1))}
+            disabled={currentPage === (totalPages || 1)}
+            className="px-4 py-2 border border-neutral-200 rounded-md text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
         </div>
       </div>
     </div>

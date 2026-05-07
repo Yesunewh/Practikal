@@ -18,7 +18,7 @@ export const QUESTION_KIND_OPTIONS: {
   {
     value: 'binary_verdict',
     label: 'Binary verdict',
-    description: 'Mock email or message with two opposite actions (e.g. phishing vs legitimate).',
+    description: 'Mock Gmail-style email, WhatsApp-style chat, or Telegram-style chat with two opposite actions.',
   },
 ];
 

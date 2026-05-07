@@ -1,272 +1,345 @@
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import type { Challenge, Assignment, LearningPath } from '../types';
 import { learningPaths, pathCompletedCount } from '../data/learningPaths';
 import { getWeakestCategory } from '../utils/progressCalculations';
-import { Heart, Lock, CheckCircle2, Calendar, Target, Route, Sparkles } from 'lucide-react';
-import { getStrings } from '../i18n/strings';
+import { 
+  Shield, 
+  CheckCircle2, 
+  Target, 
+  Route, 
+  Sparkles,
+  Trophy,
+  Zap,
+  Star,
+  ChevronRight,
+  TrendingUp,
+  Clock
+} from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
+import { interpolate } from '../i18n/messages';
 import {
   selectUserProgress,
   selectPassedChallengeIds,
-  selectChallengeSummariesForUser,
 } from '../store/slices/progressSlice';
 import { mergeApiOrLocalProgression } from '../utils/challengeProgression';
 import { assignmentsForUser } from '../store/slices/campaignsSlice';
+import { ModuleCard } from './modules/ModuleCard';
 
 interface GameDashboardProps {
   onNavigate: (page: string) => void;
 }
 
 function GameDashboard({ onNavigate }: GameDashboardProps) {
+  const { messages } = useI18n();
   const user = useSelector((state: RootState) => state.auth.user);
-  const challenges = useSelector((state: any) => state.challenges.challenges);
-  const assignments = useSelector((state: any) => state.campaigns.assignments);
+  const challenges = useSelector((state: RootState) => state.challenges.challenges);
+  const assignments = useSelector((state: RootState) => state.campaigns.assignments);
   const uid = user?.id || '';
   const progress = useSelector(selectUserProgress(uid, challenges));
   const completedIds = useSelector(selectPassedChallengeIds(uid));
-  const challengeSummaries = useSelector(selectChallengeSummariesForUser(uid));
 
   if (!user) return null;
 
-  const t = getStrings().dashboard;
+  const t = messages.dashboard;
   const mine = assignmentsForUser(assignments, user.id);
   const weakest = getWeakestCategory(progress);
 
   const weekSlot = Math.floor(Date.now() / (7 * 86400000));
-  const spotlight =
-    challenges.length > 0 ? challenges[weekSlot % challenges.length] : null;
+  const spotlight = challenges.length > 0 ? challenges[weekSlot % challenges.length] : null;
+
+  // Curated "Continue Learning" challenges (limit to 4)
+  const continueLearning = challenges
+    .filter((c: Challenge) => !completedIds.has(c.id))
+    .slice(0, 4);
 
   return (
-    <div className="min-h-screen bg-neutral-50 p-8">
-      {spotlight && (
-        <div className="mb-8 rounded-xl border border-emerald-200 bg-emerald-50/80 p-5 flex flex-wrap items-center gap-4">
-          <Sparkles className="text-emerald-600 shrink-0" size={26} />
-          <div className="flex-1 min-w-[200px]">
-            <div className="text-sm font-medium text-emerald-800">{t.weeklyPick}</div>
-            <div className="text-lg font-semibold text-emerald-950">{spotlight.title}</div>
-            <p className="text-sm text-emerald-900 mt-1">{t.weeklyPickHelp}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('challenges')}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700"
-          >
-            {t.start}
-          </button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <div className="flex items-center gap-2 text-emerald-900">
-            <Heart size={24} />
-            <span className="text-2xl font-semibold">{user.reputation}%</span>
-          </div>
-          <div className="text-neutral-600">{t.reputation}</div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm">
-          <div className="text-lg font-medium mb-2">{t.streakTitle}</div>
-          <div className="text-neutral-600 mb-4">
-            {t.streakHelp}{' '}
-            <span className="font-semibold text-emerald-700">{progress.currentStreak}</span>
-            {progress.longestStreak > 0 && (
-              <span className="text-sm text-neutral-500">
-                {' '}
-                ({t.best} {progress.longestStreak})
-              </span>
-            )}
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm
-                  ${i < progress.currentStreak ? 'border-emerald-500 text-emerald-500' : 'border-neutral-200 text-neutral-300'}`}
-              >
-                🔥
-              </div>
-            ))}
+    <div className="min-h-screen bg-white">
+      {/* Hero Header */}
+      <div className="bg-neutral-50/50 border-b border-neutral-100">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 sm:text-4xl">
+                {interpolate(t.welcomeBack, { name: user.name.split(' ')[0] })}
+              </h1>
+              <p className="mt-2 text-neutral-500 font-medium max-w-2xl text-base">
+                {interpolate(t.completedCountMessage, { count: completedIds.size })}
+              </p>
+            </div>
+            
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full md:w-auto">
+              <StatItem 
+                icon={<Zap size={18} className="text-amber-500 fill-amber-500" />} 
+                label={t.streakLabel} 
+                value={`${progress.currentStreak}d`} 
+              />
+              <StatItem 
+                icon={<Star size={18} className="text-emerald-500 fill-emerald-500" />} 
+                label={t.reputationLabel} 
+                value={`${user.reputation}%`} 
+              />
+              <StatItem 
+                icon={<Trophy size={18} className="text-blue-500 fill-blue-500" />} 
+                label={t.totalXpLabel} 
+                value={user.xp || 0} 
+              />
+              <StatItem 
+                icon={<TrendingUp size={18} className="text-purple-500" />} 
+                label={t.completionLabel} 
+                value={`${Math.round((completedIds.size / (challenges.length || 1)) * 100)}%`} 
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {weakest && weakest.total > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 flex flex-wrap items-center gap-3">
-          <Target className="text-amber-600 shrink-0" size={22} />
-          <div className="flex-1 min-w-[200px]">
-            <div className="font-medium text-amber-900">{t.recommended}</div>
-            <div className="text-sm text-amber-800">
-              Practice more in <strong>{weakest.category}</strong> (avg score {weakest.averageScore}%).
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 space-y-8">
+        
+        {/* Priority Action Center */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-neutral-900 flex items-center gap-2">
+              <Zap size={22} className="text-amber-500 fill-amber-500" />
+              {t.focusTodayTitle}
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Assignments or Weakest Category */}
+            <div className="lg:col-span-2 space-y-4">
+              {mine.length > 0 ? (
+                mine.map((a: Assignment) => {
+                  const due = new Date(a.dueDate);
+                  const days = Math.ceil((due.getTime() - Date.now()) / 86400000);
+                  const overdue = days < 0;
+                  return (
+                    <div 
+                      key={a.id} 
+                      className={`group relative overflow-hidden rounded-2xl border-2 p-6 transition-all hover:shadow-lg ${
+                        overdue ? 'border-red-100 bg-red-50/30' : 'border-neutral-100 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
+                              overdue ? 'bg-red-500 text-white' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {overdue ? t.overdue : t.assignment}
+                            </span>
+                            <span className="text-xs font-semibold text-neutral-400">
+                              {t.due} {a.dueDate}
+                            </span>
+                          </div>
+                          <h3 className="text-xl font-semibold text-neutral-900">{a.title}</h3>
+                          <p className="text-sm text-neutral-500 font-medium">
+                            {t.assignmentDescription}
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => onNavigate('challenges')}
+                          className="shrink-0 flex items-center justify-center w-12 h-12 rounded-xl bg-neutral-900 text-white transition-transform group-hover:scale-110"
+                        >
+                          <ChevronRight size={24} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : weakest && weakest.total > 0 ? (
+                <div className="group relative overflow-hidden rounded-2xl border-2 border-amber-100 bg-amber-50/30 p-6 transition-all hover:shadow-lg">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold uppercase tracking-wider">
+                          {t.recommendedLabel}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-semibold text-neutral-900">
+                        {interpolate(t.improveScoreIn, { category: weakest.category })}
+                      </h3>
+                      <p className="text-sm text-neutral-500 font-medium">
+                        {interpolate(t.practiceMoreIn, {
+                          category: weakest.category,
+                          score: weakest.averageScore,
+                        })}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => onNavigate('challenges')}
+                      className="shrink-0 flex items-center justify-center w-12 h-12 rounded-xl bg-amber-600 text-white transition-transform group-hover:scale-110 shadow-md shadow-amber-600/20"
+                    >
+                      <Target size={24} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-4 rounded-2xl border-2 border-dashed border-neutral-100 bg-neutral-50/30">
+                  <div className="bg-white p-3 rounded-full shadow-sm text-neutral-300">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-lg font-semibold text-neutral-900">{t.allCaughtUpTitle}</p>
+                    <p className="text-sm text-neutral-400 font-medium">{t.allCaughtUpDescription}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Spotlight Card */}
+            <div className="relative overflow-hidden rounded-2xl bg-emerald-950 p-6 text-white shadow-xl shadow-emerald-900/20">
+              <div className="absolute -right-4 -top-4 opacity-10">
+                <Sparkles size={120} />
+              </div>
+              <div className="relative z-10 h-full flex flex-col">
+                <div className="mb-4">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider border border-emerald-500/30">
+                    {t.weeklySpotlightTitle}
+                  </span>
+                </div>
+                {spotlight ? (
+                  <>
+                    <h3 className="text-xl font-semibold mb-2">{spotlight.title}</h3>
+                    <p className="text-emerald-100/70 text-sm font-medium mb-6 line-clamp-3">
+                      {spotlight.description}
+                    </p>
+                    <div className="mt-auto flex items-center justify-between">
+                      <div className="flex items-center gap-3 text-xs font-semibold text-emerald-400">
+                        <span className="flex items-center gap-1"><Clock size={14} /> {spotlight.duration}m</span>
+                        <span className="flex items-center gap-1"><Trophy size={14} /> {spotlight.xpReward} XP</span>
+                      </div>
+                      <button 
+                        onClick={() => onNavigate('challenges')}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-semibold text-xs rounded-lg transition-colors"
+                      >
+                        {t.start}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-emerald-100/50 italic text-sm">{t.loadingSpotlight}</p>
+                )}
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => onNavigate('challenges')}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700"
-          >
-            {t.browseChallenges}
-          </button>
-        </div>
-      )}
+        </section>
 
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold text-neutral-900 mb-3 flex items-center gap-2">
-          <Calendar size={22} className="text-emerald-600" />
-          {t.assignedTitle}
-        </h2>
-        {mine.length === 0 ? (
-          <p className="text-neutral-500 text-sm">{t.noAssignments}</p>
-        ) : (
-          <div className="space-y-3">
-            {mine.map((a) => {
-              const due = new Date(a.dueDate);
-              const days = Math.ceil((due.getTime() - Date.now()) / 86400000);
-              const overdue = days < 0;
+        {/* Learning Paths Section */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-neutral-900 flex items-center gap-2">
+              <Route size={22} className="text-emerald-600" />
+              {t.pathsTitle}
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {learningPaths.map((path: LearningPath) => {
+              const done = pathCompletedCount(path, completedIds);
+              const total = path.stepChallengeIds.length;
+              const progressPct = Math.round((done / total) * 100);
               return (
-                <div
-                  key={a.id}
-                  className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 ${
-                    overdue ? 'border-red-200 bg-red-50' : 'border-neutral-200 bg-white'
-                  }`}
-                >
-                  <div>
-                    <div className="font-medium text-neutral-900">{a.title}</div>
-                    <div className="text-sm text-neutral-500">
-                      {t.due} {a.dueDate}
-                      {overdue ? (
-                        <span className="text-red-600 font-medium"> · {t.overdue}</span>
-                      ) : (
-                        <span>
-                          {' '}
-                          · {days} {t.daysLeft}
-                        </span>
-                      )}
+                <div key={path.id} className="group bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold text-neutral-900">{path.title}</h3>
+                      <p className="text-xs text-neutral-500 font-medium line-clamp-1">{path.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-semibold text-neutral-900">{progressPct}%</div>
+                      <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-widest">{t.progressLabel}</div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('challenges')}
-                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700"
-                  >
-                    {t.start}
-                  </button>
+                  
+                  {/* Mini Progress Dots */}
+                  <div className="flex gap-1.5 mb-4">
+                    {path.stepChallengeIds.map((cid: string, idx: number) => {
+                      const isDone = completedIds.has(cid);
+                      const isLocked = idx > 0 && !completedIds.has(path.stepChallengeIds[idx-1]);
+                      return (
+                        <div 
+                          key={cid} 
+                          className={`h-1.5 flex-1 rounded-full ${
+                            isDone ? 'bg-emerald-500' : isLocked ? 'bg-neutral-100' : 'bg-amber-400'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex -space-x-2">
+                      {path.stepChallengeIds.slice(0, 3).map((cid) => (
+                        <div key={cid} className="w-6 h-6 rounded-full bg-neutral-100 border-2 border-white flex items-center justify-center">
+                          <Shield size={10} className="text-neutral-400" />
+                        </div>
+                      ))}
+                      {path.stepChallengeIds.length > 3 && (
+                        <div className="w-6 h-6 rounded-full bg-neutral-50 border-2 border-white flex items-center justify-center text-[8px] font-bold text-neutral-500">
+                          +{path.stepChallengeIds.length - 3}
+                        </div>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => onNavigate('challenges')}
+                      className="text-emerald-600 font-semibold text-xs hover:underline flex items-center gap-1"
+                    >
+                      {t.viewPathLink} <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
-        )}
-      </div>
+        </section>
 
-      <div className="mb-10">
-        <h2 className="text-xl font-semibold text-neutral-900 mb-3 flex items-center gap-2">
-          <Route size={22} className="text-emerald-600" />
-          {t.pathsTitle}
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {learningPaths.map((path) => {
-            const done = pathCompletedCount(path, completedIds);
-            const total = path.stepChallengeIds.length;
-            return (
-              <div key={path.id} className="bg-white rounded-xl border border-neutral-200 p-5 shadow-sm">
-                <h3 className="font-semibold text-neutral-900 mb-1">{path.title}</h3>
-                <p className="text-sm text-neutral-600 mb-4">{path.description}</p>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {path.stepChallengeIds.map((cid, idx) => {
-                    const doneHere = completedIds.has(cid);
-                    const prevId = idx > 0 ? path.stepChallengeIds[idx - 1] : null;
-                    const locked = idx > 0 && prevId !== null && !completedIds.has(prevId);
-                    const title = challenges.find((c: any) => c.id === cid)?.title ?? `Challenge ${cid}`;
-                    return (
-                      <div
-                        key={cid}
-                        className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border ${
-                          doneHere
-                            ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                            : locked
-                              ? 'border-neutral-200 bg-neutral-50 text-neutral-400'
-                              : 'border-amber-200 bg-amber-50 text-amber-900'
-                        }`}
-                        title={title}
-                      >
-                        {locked ? <Lock size={12} /> : doneHere ? <CheckCircle2 size={12} /> : null}
-                        <span className="truncate max-w-[140px]">{title}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="text-sm text-neutral-600">
-                  Progress: {done} / {total} steps
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <h2 className="text-2xl font-semibold text-neutral-900 mb-6">{t.challengesTitle}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {challenges.map((challenge: any) => {
-          const done = completedIds.has(challenge.id);
-          const { progressionLocked, progressionLockReason } = mergeApiOrLocalProgression(
-            challenge,
-            challenges,
-            completedIds,
-          );
-          const summary = challengeSummaries[challenge.id];
-          const barPct = done ? 100 : summary?.bestScore ?? 0;
-          return (
-            <div
-              key={challenge.id}
-              title={progressionLocked ? progressionLockReason || undefined : undefined}
-              className={`bg-white rounded-xl p-6 shadow-sm transition-shadow tap-highlight border ${
-                progressionLocked
-                  ? 'opacity-80 cursor-pointer hover:shadow-md'
-                  : 'cursor-pointer hover:shadow-md'
-              } ${done ? 'border-emerald-200 ring-1 ring-emerald-50' : 'border-transparent'}`}
+        {/* Continue Training Grid */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-neutral-900 flex items-center gap-2">
+              <Trophy size={22} className="text-emerald-600" />
+              {t.continueTrainingTitle}
+            </h2>
+            <button 
               onClick={() => onNavigate('challenges')}
+              className="text-emerald-600 font-semibold text-sm hover:underline flex items-center gap-1"
             >
-              <div className="flex justify-between items-start gap-3 mb-4">
-                <h3 className="text-lg font-medium">{challenge.title}</h3>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  {progressionLocked && (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-50 px-2 py-1 rounded-full">
-                      <Lock size={12} />
-                      Locked
-                    </span>
-                  )}
-                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm">
-                    {challenge.difficulty}
-                  </span>
-                  {done && (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                      <CheckCircle2 size={14} />
-                      {t.completedLabel}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <p className="text-neutral-600 mb-3">{challenge.description}</p>
-              <div className="mb-4">
-                <div className="flex justify-between text-xs text-neutral-500 mb-1">
-                  <span>{t.progressLabel}</span>
-                  <span>{barPct}%</span>
-                </div>
-                <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      progressionLocked ? 'bg-neutral-300' : done ? 'bg-emerald-500' : 'bg-amber-400'
-                    }`}
-                    style={{ width: `${progressionLocked ? 0 : barPct}%` }}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm text-neutral-500">
-                <span>🕒 {challenge.duration} min</span>
-                <span>⭐ {challenge.xpReward} XP</span>
-              </div>
-            </div>
-          );
-        })}
+              {t.browseAllLink} <ChevronRight size={16} />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {continueLearning.map((challenge: Challenge, idx: number) => {
+              const lockInfo = mergeApiOrLocalProgression(challenge, challenges, completedIds);
+              return (
+                <ModuleCard 
+                  key={challenge.id}
+                  challenge={challenge}
+                  index={idx}
+                  isDone={completedIds.has(challenge.id)}
+                  progressionLocked={lockInfo.progressionLocked}
+                  progressionLockReason={lockInfo.progressionLockReason}
+                  onClick={() => onNavigate('challenges')}
+                />
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function StatItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-100 p-3 shadow-sm flex items-center gap-3">
+      <div className="w-10 h-10 rounded-xl bg-neutral-50 flex items-center justify-center shrink-0">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider leading-none mb-1">{label}</div>
+        <div className="text-base font-semibold text-neutral-900 leading-none">{value}</div>
       </div>
     </div>
   );

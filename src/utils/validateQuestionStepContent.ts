@@ -26,6 +26,12 @@ export function validateQuestionContent(content: QuestionContent): string | null
     if (options.length !== 2) return 'Binary verdict must have exactly two choices.';
     if (correctCount !== 1) return 'Binary verdict must have exactly one correct answer.';
     if (!(content.scenarioBody ?? '').trim()) return 'Binary verdict needs the mock message body.';
+    const ch = content.verdictContext?.channel;
+    if ((ch === 'whatsapp' || ch === 'telegram') && !(content.verdictContext?.fromLine ?? '').trim()) {
+      return ch === 'telegram'
+        ? 'Telegram-style verdict needs a contact name.'
+        : 'WhatsApp-style verdict needs a contact name.';
+    }
     return null;
   }
 

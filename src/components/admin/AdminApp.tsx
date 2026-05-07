@@ -1,5 +1,7 @@
 import { User } from '../../types';
 import AdminDashboard from './AdminDashboard';
+import { useI18n } from '../../i18n/I18nContext';
+import { canAccessAdminPortal } from '../../utils/authIdentity';
 
 interface AdminAppProps {
   currentUser: User;
@@ -7,15 +9,16 @@ interface AdminAppProps {
 }
 
 export default function AdminApp({ currentUser, onBack }: AdminAppProps) {
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
-  
-  // Redirect non-admin users
+  const { messages } = useI18n();
+  const ad = messages.admin;
+  const isAdmin = canAccessAdminPortal(currentUser);
+
   if (!isAdmin) {
     return (
       <div className="p-6">
         <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-          <h2 className="text-xl font-bold text-red-600 mb-2">Access Denied</h2>
-          <p className="text-gray-600">You don't have permission to access the admin panel.</p>
+          <h2 className="text-xl font-bold text-red-600 mb-2">{ad.accessDeniedTitle}</h2>
+          <p className="text-gray-600">{ad.accessDeniedBody}</p>
         </div>
       </div>
     );
